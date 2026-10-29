@@ -1,9 +1,10 @@
 import json
+import re
 from contextlib import contextmanager
 from datetime import date, timedelta
 from typing import Literal, NotRequired, TypedDict
 
-from core import db
+from core import db, recipes
 
 Slot = Literal["breakfast", "lunch", "dinner", "snack"]
 
@@ -193,3 +194,27 @@ def get_frequent_groceries(limit: int = 12) -> list[str]:
         if name.lower() not in on_list and name.lower() not in {s.lower() for s in suggestions}:
             suggestions.append(name)
     return suggestions[:limit]
+
+
+def read_recipe(link_or_text: str) -> dict:
+    """Read a recipe from a link (any site that publishes standard recipe data, like NYT Cooking) or from pasted
+    ingredient lines, and list its ingredients as grocery items. Doesn't add anything: each ingredient says whether
+    it's already in the pantry or is a staple like salt, and `suggested` marks the ones worth buying."""
+    text = link_or_text.strip()
+    if re.match(r"^https?://\S+$", text):
+        recipe = recipes.fetch_recipe(text)
+    else:
+        recipe = {"title": "Pasted ingredients", "lines": recipes.parse_ingredient_text(text), "steps": [], "source": None}
+        if not recipe["lines"]:
+            raise ValueError("Paste a recipe link or at least one ingredient line")
+    with _tx() as conn:
+        pantry = [r["name"].lower() for r in conn.execute("SELECT name FROM pantry_items")]
+    ingredients = []
+    for line in recipe["lines"]:
+        name = recipes.ingredient_name(line)
+        lowered = name.lower()
+        in_pantry = any(item == lowered or (len(item) >= 3 and item in lowered) for item in pantry)
+        staple = recipes.is_staple(name)
+        ingredients.append({"line": line, "name": name, "in_pantry": in_pantry, "staple": staple,
+                            "suggested": not (in_pantry or staple)})
+    return {"title": recipe["title"], "source": recipe["source"], "ingredients": ingredients, "steps": recipe["steps"]}
