@@ -1,8 +1,26 @@
 import json
 from contextlib import contextmanager
 from datetime import date, timedelta
+from typing import Literal, NotRequired, TypedDict
 
 from core import db
+
+Slot = Literal["breakfast", "lunch", "dinner", "snack"]
+
+
+class PantryItemIn(TypedDict):
+    name: str
+    qty: NotRequired[float]
+    unit: NotRequired[str]
+    category: NotRequired[str]
+    expires_on: NotRequired[str]
+
+
+class GroceryItemIn(TypedDict):
+    name: str
+    qty: NotRequired[float]
+    unit: NotRequired[str]
+
 
 SLOT_ORDER = "CASE slot WHEN 'breakfast' THEN 0 WHEN 'lunch' THEN 1 WHEN 'snack' THEN 2 ELSE 3 END"
 
@@ -25,14 +43,14 @@ def _iso(value):
     return date.fromisoformat(value).isoformat() if value else None
 
 
-def get_pantry():
+def get_pantry() -> list[dict]:
     """List everything in the pantry, soonest-expiring first."""
     with _tx() as conn:
         return _rows(conn.execute(
             "SELECT * FROM pantry_items ORDER BY expires_on IS NULL, expires_on, name"))
 
 
-def add_pantry_items(items, source="manual"):
+def add_pantry_items(items: list[PantryItemIn], source: Literal["manual", "receipt", "agent"] = "manual") -> list[int]:
     """Add items to the pantry. Each item is a dict with name (required), qty, unit, category,
     and expires_on (YYYY-MM-DD). Returns the new item ids."""
     ids = []
@@ -46,7 +64,7 @@ def add_pantry_items(items, source="manual"):
     return ids
 
 
-def use_pantry_item(item_id, qty=None):
+def use_pantry_item(item_id: int, qty: float | None = None) -> dict:
     """Use up a pantry item. Pass qty to use part of it; omit qty to remove it entirely.
     Returns the remaining quantity (0 means the item was removed)."""
     if qty is not None and qty <= 0:
@@ -63,7 +81,7 @@ def use_pantry_item(item_id, qty=None):
         return {"id": item_id, "remaining": remaining}
 
 
-def get_expiring(days=3):
+def get_expiring(days: int = 3) -> list[dict]:
     """List pantry items that expire within the given number of days, including ones already expired."""
     cutoff = (date.today() + timedelta(days=days)).isoformat()
     with _tx() as conn:
@@ -72,7 +90,7 @@ def get_expiring(days=3):
             (cutoff,)))
 
 
-def get_meal_plan(start=None, days=7):
+def get_meal_plan(start: str | None = None, days: int = 7) -> list[dict]:
     """List planned meals for a range of days starting at start (YYYY-MM-DD, default today)."""
     first = date.fromisoformat(start) if start else date.today()
     last = first + timedelta(days=days - 1)
@@ -86,7 +104,7 @@ def get_meal_plan(start=None, days=7):
     return meals
 
 
-def set_meal(day, slot, title, recipe=None):
+def set_meal(day: str, slot: Slot, title: str, recipe: dict | None = None) -> dict:
     """Plan a meal, replacing whatever was in that slot. day is YYYY-MM-DD, slot is breakfast, lunch,
     dinner or snack. recipe is optional: a dict such as {"ingredients": [...], "steps": [...]}."""
     with _tx() as conn:
@@ -97,20 +115,20 @@ def set_meal(day, slot, title, recipe=None):
     return {"date": _iso(day), "slot": slot, "title": title.strip()}
 
 
-def remove_meal(day, slot):
+def remove_meal(day: str, slot: Slot) -> bool:
     """Remove a planned meal. Returns whether a meal was removed."""
     with _tx() as conn:
         return conn.execute("DELETE FROM meals WHERE date = ? AND slot = ?", (_iso(day), slot)).rowcount > 0
 
 
-def get_grocery_list(include_checked=False):
+def get_grocery_list(include_checked: bool = False) -> list[dict]:
     """List the grocery list. Checked-off items are hidden unless include_checked is true."""
     where = "" if include_checked else "WHERE checked = 0"
     with _tx() as conn:
         return _rows(conn.execute(f"SELECT * FROM grocery_items {where} ORDER BY checked, name"))
 
 
-def add_grocery_items(items):
+def add_grocery_items(items: list[GroceryItemIn]) -> list[int]:
     """Add items to the grocery list. Each item is a dict with name (required), qty and unit.
     An item already on the list is merged rather than duplicated. Returns the item ids."""
     ids = []
@@ -130,7 +148,7 @@ def add_grocery_items(items):
     return ids
 
 
-def check_grocery_item(item_id, checked=True):
+def check_grocery_item(item_id: int, checked: bool = True) -> dict:
     """Check an item off the grocery list, or uncheck it with checked=false."""
     with _tx() as conn:
         if conn.execute("UPDATE grocery_items SET checked = ? WHERE id = ?", (int(checked), item_id)).rowcount == 0:
@@ -138,7 +156,7 @@ def check_grocery_item(item_id, checked=True):
     return {"id": item_id, "checked": checked}
 
 
-def clear_checked_groceries():
+def clear_checked_groceries() -> int:
     """Delete every checked-off item from the grocery list. Returns how many were removed."""
     with _tx() as conn:
         return conn.execute("DELETE FROM grocery_items WHERE checked = 1").rowcount
