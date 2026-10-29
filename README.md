@@ -12,7 +12,7 @@ A kitchen assistant that runs on a Raspberry Pi with a touchscreen. It keeps tra
 ## What it does
 
 - **Pantry:** what you have, how much, and when it expires. Shows what to use soon.
-- **Dinner plan:** one dinner a day, Monday to Sunday. Each dinner can have a recipe (from a link or pasted ingredients), a cook, or be a **Take-Out!** night. Move a dinner to another day (if that day is taken, the two swap) or delete it. One tap adds a dinner's ingredients to the grocery list, leaving out what's already in the pantry. Who can cook comes from `KITCHEN_COOKS` in your `.env`, so names stay out of the code.
+- **Dinner plan:** one dinner a day, Monday to Sunday. Each dinner can have a recipe (from a link or pasted ingredients), a cook and notes, or be a **Take-Out!** night with a note on where to order from (take-out nights don't get a cook). Move a dinner to another day (if that day is taken, the two swap) or delete it. One tap adds a dinner's ingredients to the grocery list, leaving out what's already in the pantry. Who can cook comes from `KITCHEN_COOKS` in your `.env`, so names stay out of the code.
 - **Grocery list:** add and check off items. Adding something already on the list merges it instead of creating a duplicate, and re-adding something you checked off brings it back.
 - **Touchscreen app:** a big-button kitchen display. Tap an item to check it off; it dims in place so nothing moves under your finger. **+ Add** shows one-tap buttons for the things you buy most. The **Dinners** screen shows the week. Tap a day to pick who's cooking, make it take-out, add its ingredients to the list, move it or delete it.
 - **Phone page:** tap **Phone** on the touchscreen and scan the QR code. Your phone gets the grocery list with a text box for adding anything, suggestion chips, and check-offs. Type `2 avocados` and it records the quantity. Save it to your home screen and it works like an app. The **Dinners** tab is the planner: tap a day to set the meal, paste its recipe, pick the cook or choose another day. After you save a dinner with a new recipe, its ingredient checklist opens so you can add what you need.
@@ -96,7 +96,13 @@ flowchart LR
    ```
    It opens a 1024x600 window on Windows and goes fullscreen on Linux. It reads the same `.env`, so it uses your token automatically.
 
-7. **Connect your phone.** Tap **Phone** on the touchscreen and scan the code with your phone's camera. Your phone has to be on the same network as the server (or on Tailscale). Then use your browser's "Add to Home Screen". Set `KITCHEN_PUBLIC_URL` if the QR code should use a hostname instead of the server's local IP; see [Configuration](#configuration).
+7. **Connect your phone.** Tap **Phone** on the touchscreen and scan the code with your phone's camera. Your phone has to be on the same network as the server (or on Tailscale). Then use your browser's "Add to Home Screen". By default the QR code points to the server's local IP address.
+
+   **Give it a friendly name (optional):** add a local DNS record so phones can reach the server as, for example, `kitchen.lan`:
+   - **Pi-hole:** Settings → Local DNS Records (v6) or Local DNS → DNS Records (v5). Add domain `kitchen.lan` pointing to the server's IP.
+   - **No Pi-hole:** most routers have a similar "local DNS" or "hostname" setting.
+
+   Then set `KITCHEN_PUBLIC_URL=http://kitchen.lan:8000` in `.env` and restart the server. Phones paired at the old address need to scan a new code, because a phone's login is tied to the address it paired with. Phones need to use that DNS server (Pi-hole) for the name to work.
 
 <img src="docs/recipe-import.jpg" alt="Importing an NYT Cooking recipe on a phone" width="260">
 
@@ -129,7 +135,7 @@ From another device, replace `localhost` with the server's hostname (for example
 | `use_pantry_item` | Use part of an item, or remove it entirely |
 | `get_expiring` | Items expiring within N days, including already expired |
 | `get_meal_plan` | Meals for a range of days |
-| `set_meal` | Plan a meal in a slot with an optional recipe, cook and take-out flag, replacing what was there |
+| `set_meal` | Plan a meal in a slot with an optional recipe, cook, notes and take-out flag, replacing what was there |
 | `remove_meal` | Remove a planned meal |
 | `get_grocery_list` | The grocery list, optionally including checked items |
 | `add_grocery_items` | Add items, merging any already on the list |
@@ -148,7 +154,7 @@ From another device, replace `localhost` with the server's hostname (for example
 | GET | `/api/pantry` | All pantry items |
 | GET | `/api/expiring?days=3` | Items expiring soon |
 | GET | `/api/meals?start=YYYY-MM-DD&days=7` | Meal plan (start defaults to today) |
-| PUT | `/api/meals/{date}` | Set that day's dinner, body: `{"title", "cook", "takeout", "recipe"}` |
+| PUT | `/api/meals/{date}` | Set that day's dinner, body: `{"title", "cook", "takeout", "notes", "recipe"}` |
 | DELETE | `/api/meals/{date}` | Delete that day's dinner |
 | POST | `/api/meals/{date}/move?to=YYYY-MM-DD` | Move a dinner, swapping if the target day is taken |
 | GET | `/api/meals/{date}/ingredients` | The dinner's ingredients as grocery items |
