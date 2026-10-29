@@ -1,6 +1,7 @@
 import os
 import secrets
 from functools import wraps
+from typing import NotRequired, TypedDict
 
 from fastapi import Body, FastAPI, Request
 from fastapi.responses import JSONResponse
@@ -22,6 +23,7 @@ TOOLS = [
     tools.get_meal_plan, tools.set_meal, tools.remove_meal,
     tools.get_grocery_list, tools.add_grocery_items, tools.check_grocery_item, tools.clear_checked_groceries,
     tools.get_frequent_groceries, tools.read_recipe,
+    tools.get_cooks, tools.move_meal, tools.get_meal_ingredients,
 ]
 
 mcp = MCPServer(
@@ -80,9 +82,42 @@ def expiring(days: int = 3):
     return tools.get_expiring(days)
 
 
+class DinnerIn(TypedDict):
+    title: str
+    recipe: NotRequired[dict | None]
+    cook: NotRequired[str | None]
+    takeout: NotRequired[bool]
+
+
 @app.get("/api/meals")
 def meals(start: str | None = None, days: int = 7):
-    return tools.get_meal_plan(start, days)
+    return tools.get_meal_plan(start, min(days, 62))
+
+
+@app.get("/api/cooks")
+def cooks():
+    return tools.get_cooks()
+
+
+@app.put("/api/meals/{day}")
+def set_dinner(day: str, dinner: DinnerIn):
+    return tools.set_meal(day, "dinner", dinner["title"], dinner.get("recipe"), dinner.get("cook"),
+                          dinner.get("takeout", False))
+
+
+@app.delete("/api/meals/{day}")
+def remove_dinner(day: str):
+    return {"removed": tools.remove_meal(day, "dinner")}
+
+
+@app.post("/api/meals/{day}/move")
+def move_dinner(day: str, to: str):
+    return tools.move_meal(day, to)
+
+
+@app.get("/api/meals/{day}/ingredients")
+def dinner_ingredients(day: str):
+    return tools.get_meal_ingredients(day)
 
 
 @app.get("/api/grocery")
