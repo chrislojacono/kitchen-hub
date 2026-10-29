@@ -19,6 +19,7 @@ TOOLS = [
     tools.get_pantry, tools.add_pantry_items, tools.use_pantry_item, tools.get_expiring,
     tools.get_meal_plan, tools.set_meal, tools.remove_meal,
     tools.get_grocery_list, tools.add_grocery_items, tools.check_grocery_item, tools.clear_checked_groceries,
+    tools.get_frequent_groceries,
 ]
 
 mcp = MCPServer(

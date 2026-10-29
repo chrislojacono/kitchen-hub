@@ -22,6 +22,11 @@ class GroceryItemIn(TypedDict):
     unit: NotRequired[str]
 
 
+MAX_NAME_LENGTH = 80
+MAX_TITLE_LENGTH = 120
+STAPLES = ["Milk", "Eggs", "Bread", "Butter", "Bananas", "Apples", "Onions", "Garlic",
+           "Chicken", "Rice", "Pasta", "Cheese", "Yogurt", "Coffee", "Tomatoes", "Spinach"]
+
 SLOT_ORDER = "CASE slot WHEN 'breakfast' THEN 0 WHEN 'lunch' THEN 1 WHEN 'snack' THEN 2 ELSE 3 END"
 
 
@@ -37,6 +42,13 @@ def _tx():
 
 def _rows(cur):
     return [dict(r) for r in cur.fetchall()]
+
+
+def _text(value, limit=MAX_NAME_LENGTH):
+    text = " ".join(str(value).split())
+    if not text or len(text) > limit:
+        raise ValueError(f"Names must be 1 to {limit} characters")
+    return text
 
 
 def _iso(value):
@@ -58,7 +70,7 @@ def add_pantry_items(items: list[PantryItemIn], source: Literal["manual", "recei
         for item in items:
             cur = conn.execute(
                 "INSERT INTO pantry_items (name, qty, unit, category, expires_on, source) VALUES (?, ?, ?, ?, ?, ?)",
-                (item["name"].strip(), 1 if item.get("qty") is None else item["qty"], item.get("unit"),
+                (_text(item["name"]), 1 if item.get("qty") is None else item["qty"], item.get("unit"),
                  item.get("category"), _iso(item.get("expires_on")), source))
             ids.append(cur.lastrowid)
     return ids
@@ -111,8 +123,8 @@ def set_meal(day: str, slot: Slot, title: str, recipe: dict | None = None) -> di
         conn.execute(
             "INSERT INTO meals (date, slot, title, recipe_json) VALUES (?, ?, ?, ?) "
             "ON CONFLICT (date, slot) DO UPDATE SET title = excluded.title, recipe_json = excluded.recipe_json",
-            (_iso(day), slot, title.strip(), json.dumps(recipe) if recipe else None))
-    return {"date": _iso(day), "slot": slot, "title": title.strip()}
+            (_iso(day), slot, _text(title, MAX_TITLE_LENGTH), json.dumps(recipe) if recipe else None))
+    return {"date": _iso(day), "slot": slot, "title": _text(title, MAX_TITLE_LENGTH)}
 
 
 def remove_meal(day: str, slot: Slot) -> bool:
@@ -134,10 +146,13 @@ def add_grocery_items(items: list[GroceryItemIn]) -> list[int]:
     ids = []
     with _tx() as conn:
         for item in items:
-            name, qty, unit = item["name"].strip(), item.get("qty"), item.get("unit")
+            name, qty, unit = _text(item["name"]), item.get("qty"), item.get("unit")
             existing = conn.execute(
                 "SELECT id, qty, unit FROM grocery_items WHERE checked = 0 AND name = ? COLLATE NOCASE",
                 (name,)).fetchone()
+            conn.execute(
+                "INSERT INTO grocery_history (name) VALUES (?) ON CONFLICT (name) DO UPDATE SET "
+                "times_added = times_added + 1, last_added = date('now', 'localtime')", (name,))
             if existing is None:
                 ids.append(conn.execute(
                     "INSERT INTO grocery_items (name, qty, unit) VALUES (?, ?, ?)", (name, qty, unit)).lastrowid)
@@ -160,3 +175,17 @@ def clear_checked_groceries() -> int:
     """Delete every checked-off item from the grocery list. Returns how many were removed."""
     with _tx() as conn:
         return conn.execute("DELETE FROM grocery_items WHERE checked = 1").rowcount
+
+
+def get_frequent_groceries(limit: int = 12) -> list[str]:
+    """Suggest grocery items to re-add: the ones bought most often, then common staples,
+    skipping anything already on the list."""
+    with _tx() as conn:
+        on_list = {r["name"].lower() for r in conn.execute("SELECT name FROM grocery_items WHERE checked = 0")}
+        history = [r["name"] for r in conn.execute(
+            "SELECT name FROM grocery_history ORDER BY times_added DESC, last_added DESC, name")]
+    suggestions = []
+    for name in history + STAPLES:
+        if name.lower() not in on_list and name.lower() not in {s.lower() for s in suggestions}:
+            suggestions.append(name)
+    return suggestions[:limit]

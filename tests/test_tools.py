@@ -72,7 +72,31 @@ def test_grocery():
     assert {i["name"] for i in tools.get_grocery_list()} == {"Bread", "Eggs"}
 
 
+def test_frequent_groceries():
+    _fresh_db()
+    assert tools.get_frequent_groceries(3) == ["Milk", "Eggs", "Bread"]
+    tools.add_grocery_items([{"name": "Oat milk"}, {"name": "Limes"}])
+    tools.add_grocery_items([{"name": "oat milk"}])
+    tools.check_grocery_item(1)
+    tools.clear_checked_groceries()
+    frequent = tools.get_frequent_groceries(4)
+    assert frequent == ["Oat milk", "Milk", "Eggs", "Bread"], frequent
+    assert "Limes" not in tools.get_frequent_groceries(20)
+
+
+def test_names_validated():
+    _fresh_db()
+    assert tools.add_grocery_items([{"name": "  Greek   yogurt "}]) == [1]
+    assert tools.get_grocery_list()[0]["name"] == "Greek yogurt"
+    for bad in ("", "   ", "x" * 81):
+        try:
+            tools.add_grocery_items([{"name": bad}])
+            raise AssertionError(f"accepted {bad!r}")
+        except ValueError:
+            pass
+
+
 if __name__ == "__main__":
-    for test in (test_pantry, test_meals, test_grocery):
+    for test in (test_pantry, test_meals, test_grocery, test_frequent_groceries, test_names_validated):
         test()
         print(f"{test.__name__} ok")

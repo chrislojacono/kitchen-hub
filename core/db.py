@@ -35,6 +35,12 @@ CREATE TABLE IF NOT EXISTS grocery_items (
     added_on TEXT NOT NULL DEFAULT (date('now', 'localtime'))
 );
 
+CREATE TABLE IF NOT EXISTS grocery_history (
+    name TEXT PRIMARY KEY COLLATE NOCASE,
+    times_added INTEGER NOT NULL DEFAULT 1,
+    last_added TEXT NOT NULL DEFAULT (date('now', 'localtime'))
+);
+
 CREATE TABLE IF NOT EXISTS receipts (
     id INTEGER PRIMARY KEY,
     image_path TEXT NOT NULL,
