@@ -10,6 +10,9 @@ from kivy.uix.screenmanager import Screen
 CARD_COLOR = (1, 1, 1, 0.055)
 ACCENT_TEXT = (0.62, 0.68, 0.76, 1)
 BODY_TEXT = (0.88, 0.9, 0.93, 1)
+ACCENT = (0.24, 0.81, 0.56, 1)
+ON_ACCENT = (0.02, 0.15, 0.10, 1)
+PANEL_COLOR = (0.06, 0.09, 0.08, 0.97)
 TAP_DEBOUNCE_SECONDS = 0.6
 
 
@@ -56,12 +59,13 @@ class Card(BoxLayout):
 
 
 class CardButton(Button):
-    def __init__(self, radius=16, halign="center", **kwargs):
+    def __init__(self, radius=16, halign="center", bg=CARD_COLOR, color=BODY_TEXT, padding_x=24, **kwargs):
         super().__init__(background_normal="", background_down="", background_disabled_normal="",
-                         background_color=(0, 0, 0, 0), color=BODY_TEXT, markup=True,
-                         padding_x=24, **kwargs)
+                         background_color=(0, 0, 0, 0), color=color, markup=True,
+                         padding_x=padding_x, **kwargs)
+        self._bg_alpha = bg[3]
         with self.canvas.before:
-            self._bg = Color(*CARD_COLOR)
+            self._bg = Color(*bg)
             self._rect = RoundedRectangle(pos=self.pos, size=self.size, radius=[radius])
         self.bind(pos=self._update_rect, size=self._update_rect, state=self._update_state)
         fit_text(self, halign)
@@ -71,7 +75,7 @@ class CardButton(Button):
         self._rect.size = self.size
 
     def _update_state(self, *_):
-        self._bg.a = CARD_COLOR[3] * 3 if self.state == "down" else CARD_COLOR[3]
+        self._bg.a = min(1, self._bg_alpha * 3) if self.state == "down" else self._bg_alpha
 
 
 class GradientScreen(Screen):

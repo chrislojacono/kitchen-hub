@@ -79,6 +79,8 @@ class RootLayout(FloatLayout):
         for name, _, screen in SCREENS:
             self.sm.add_widget(screen(name=name))
         self.add_widget(self.sm)
+        # Kivy doesn't reliably fire on_enter for the first screen, so start it explicitly.
+        Clock.schedule_once(lambda _: self.sm.current_screen.dispatch("on_enter"))
 
         for direction, step, pos_hint in (("left", -1, {"x": 0.01, "center_y": 0.5}),
                                           ("right", 1, {"right": 0.99, "center_y": 0.5})):
