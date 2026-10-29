@@ -142,14 +142,15 @@ def get_grocery_list(include_checked: bool = False) -> list[dict]:
 
 def add_grocery_items(items: list[GroceryItemIn]) -> list[int]:
     """Add items to the grocery list. Each item is a dict with name (required), qty and unit.
-    An item already on the list is merged rather than duplicated. Returns the item ids."""
+    An item already on the list is merged rather than duplicated, and a checked-off one is unchecked.
+    Returns the item ids."""
     ids = []
     with _tx() as conn:
         for item in items:
             name, qty, unit = _text(item["name"]), item.get("qty"), item.get("unit")
             existing = conn.execute(
-                "SELECT id, qty, unit FROM grocery_items WHERE checked = 0 AND name = ? COLLATE NOCASE",
-                (name,)).fetchone()
+                "SELECT id, qty, unit, checked FROM grocery_items WHERE name = ? COLLATE NOCASE "
+                "ORDER BY checked LIMIT 1", (name,)).fetchone()
             conn.execute(
                 "INSERT INTO grocery_history (name) VALUES (?) ON CONFLICT (name) DO UPDATE SET "
                 "times_added = times_added + 1, last_added = date('now', 'localtime')", (name,))
@@ -157,7 +158,10 @@ def add_grocery_items(items: list[GroceryItemIn]) -> list[int]:
                 ids.append(conn.execute(
                     "INSERT INTO grocery_items (name, qty, unit) VALUES (?, ?, ?)", (name, qty, unit)).lastrowid)
                 continue
-            if existing["qty"] is not None and qty is not None and existing["unit"] == unit:
+            if existing["checked"]:
+                conn.execute("UPDATE grocery_items SET checked = 0, qty = ?, unit = ? WHERE id = ?",
+                             (qty, unit, existing["id"]))
+            elif existing["qty"] is not None and qty is not None and existing["unit"] == unit:
                 conn.execute("UPDATE grocery_items SET qty = ? WHERE id = ?", (existing["qty"] + qty, existing["id"]))
             ids.append(existing["id"])
     return ids

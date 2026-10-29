@@ -66,10 +66,11 @@ def test_grocery():
     assert [i["name"] for i in tools.get_grocery_list()] == ["Bread"]
     assert len(tools.get_grocery_list(include_checked=True)) == 2
 
-    new_eggs, = tools.add_grocery_items([{"name": "Eggs"}])
-    assert new_eggs != eggs
+    assert tools.add_grocery_items([{"name": "Eggs", "qty": 2}]) == [eggs]
+    assert {i["name"]: i["qty"] for i in tools.get_grocery_list()} == {"Bread": None, "Eggs": 2}
+    tools.check_grocery_item(eggs)
     assert tools.clear_checked_groceries() == 1
-    assert {i["name"] for i in tools.get_grocery_list()} == {"Bread", "Eggs"}
+    assert [i["name"] for i in tools.get_grocery_list(include_checked=True)] == ["Bread"]
 
 
 def test_frequent_groceries():
