@@ -2,19 +2,20 @@
 
 A kitchen assistant that runs on a Raspberry Pi with a touchscreen. It keeps track of your **pantry**, **meal plan** and **grocery list**, and lets Claude manage all three through an [MCP](https://modelcontextprotocol.io) server.
 
-> **Status:** the grocery list works end to end today: on the touchscreen, on your phone, and through Claude. More screens, the "plan my week" agent and receipt scanning are coming next (see [Roadmap](#roadmap)).
+> **Status:** the grocery list and the weekly dinner plan work end to end today: on the touchscreen, on your phone, and through Claude. The "plan my week" agent and receipt scanning are coming next (see [Roadmap](#roadmap)).
 
 | Kitchen touchscreen | Your phone |
 |---|---|
 | ![Grocery list on the 7" touchscreen](docs/grocery-screen.png) | <img src="docs/phone-page.jpg" alt="Grocery list on a phone" width="260"> |
+| ![This week's dinners on the touchscreen](docs/dinners-screen.png) | <img src="docs/phone-dinners.jpg" alt="This week's dinners on a phone" width="260"> |
 
 ## What it does
 
 - **Pantry:** what you have, how much, and when it expires. Shows what to use soon.
-- **Meal plan:** breakfast, lunch, dinner and snacks by day, with optional recipes.
+- **Dinner plan:** one dinner a day, Monday to Sunday. Each dinner can have a recipe (from a link or pasted ingredients), a cook, or be a **Take-Out!** night. Move a dinner to another day (if that day is taken, the two swap) or delete it. One tap adds a dinner's ingredients to the grocery list, leaving out what's already in the pantry. Who can cook comes from `KITCHEN_COOKS` in your `.env`, so names stay out of the code.
 - **Grocery list:** add and check off items. Adding something already on the list merges it instead of creating a duplicate, and re-adding something you checked off brings it back.
-- **Touchscreen app:** a big-button kitchen display. Tap an item to check it off; it dims in place so nothing moves under your finger. **+ Add** shows one-tap buttons for the things you buy most.
-- **Phone page:** tap **Phone** on the touchscreen and scan the QR code. Your phone gets the grocery list with a text box for adding anything, suggestion chips, and check-offs. Type `2 avocados` and it records the quantity. Save it to your home screen and it works like an app.
+- **Touchscreen app:** a big-button kitchen display. Tap an item to check it off; it dims in place so nothing moves under your finger. **+ Add** shows one-tap buttons for the things you buy most. The **Dinners** screen shows the week. Tap a day to pick who's cooking, make it take-out, add its ingredients to the list, move it or delete it.
+- **Phone page:** tap **Phone** on the touchscreen and scan the QR code. Your phone gets the grocery list with a text box for adding anything, suggestion chips, and check-offs. Type `2 avocados` and it records the quantity. Save it to your home screen and it works like an app. The **Dinners** tab is the planner: tap a day to set the meal, paste its recipe, pick the cook or choose another day. After you save a dinner with a new recipe, its ingredient checklist opens so you can add what you need.
 - **Recipe import:** on the phone page, tap **Recipe** and paste a recipe link (NYT Cooking and most recipe sites work) or an ingredient list. You get a checklist of grocery items, cleaned up from lines like "2 cups minus 2 tablespoons cake flour" to "Cake flour". Anything already in your pantry, and staples like salt and water, start unchecked. You can rename items before adding them.
 - **Claude integration:** any MCP client, such as Claude Code, can read and change all of the above. Ask "what's expiring this week?" or "add milk and eggs to the grocery list".
 
@@ -101,6 +102,7 @@ flowchart LR
 
 ![Quick add on the touchscreen](docs/quick-add.png)
 ![Pairing a phone](docs/phone-pairing.png)
+![A dinner's actions on the touchscreen](docs/dinner-panel.png)
 
 ## Connect Claude
 
@@ -127,13 +129,16 @@ From another device, replace `localhost` with the server's hostname (for example
 | `use_pantry_item` | Use part of an item, or remove it entirely |
 | `get_expiring` | Items expiring within N days, including already expired |
 | `get_meal_plan` | Meals for a range of days |
-| `set_meal` | Plan a meal in a slot, replacing what was there |
+| `set_meal` | Plan a meal in a slot with an optional recipe, cook and take-out flag, replacing what was there |
 | `remove_meal` | Remove a planned meal |
 | `get_grocery_list` | The grocery list, optionally including checked items |
 | `add_grocery_items` | Add items, merging any already on the list |
 | `check_grocery_item` | Check or uncheck an item |
 | `clear_checked_groceries` | Delete checked-off items |
 | `get_frequent_groceries` | Suggest items to re-add: the most bought first, then common staples |
+| `get_cooks` | Who can be assigned to cook |
+| `move_meal` | Move a dinner to another day, swapping if that day is taken |
+| `get_meal_ingredients` | A dinner's ingredients as grocery items, flagging pantry items and staples |
 | `read_recipe` | Read a recipe link or pasted ingredients into grocery items, flagging pantry items and staples (adds nothing) |
 
 ### REST API
@@ -143,6 +148,11 @@ From another device, replace `localhost` with the server's hostname (for example
 | GET | `/api/pantry` | All pantry items |
 | GET | `/api/expiring?days=3` | Items expiring soon |
 | GET | `/api/meals?start=YYYY-MM-DD&days=7` | Meal plan (start defaults to today) |
+| PUT | `/api/meals/{date}` | Set that day's dinner, body: `{"title", "cook", "takeout", "recipe"}` |
+| DELETE | `/api/meals/{date}` | Delete that day's dinner |
+| POST | `/api/meals/{date}/move?to=YYYY-MM-DD` | Move a dinner, swapping if the target day is taken |
+| GET | `/api/meals/{date}/ingredients` | The dinner's ingredients as grocery items |
+| GET | `/api/cooks` | Who can be assigned to cook |
 | GET | `/api/grocery?include_checked=false` | Grocery list |
 | POST | `/api/grocery` | Add items, body: `[{"name": "Milk", "qty": 2, "unit": "L"}]` |
 | GET | `/api/grocery/frequent?limit=12` | Suggested items to re-add |
@@ -162,6 +172,7 @@ Every request needs the header `Authorization: Bearer <KITCHEN_TOKEN>` (or, for 
 | `KITCHEN_TOKEN` | none (required) | Bearer token every REST and MCP request must send |
 | `KITCHEN_DB` | `kitchen.db` in the repo folder | Where the SQLite database lives |
 | `KITCHEN_API` | `http://127.0.0.1:8000` | Server address the touchscreen app talks to |
+| `KITCHEN_COOKS` | none | Comma-separated names that can be assigned to cook dinner, such as `Alex,Sam` |
 | `KITCHEN_PUBLIC_URL` | `http://<server's local IP>:8000` | Address phones use, put in the pairing QR code. Set it to the Pi's Tailscale name so phones work away from home too. |
 
 Settings are read from `.env` (see `.env.example`).
@@ -188,9 +199,10 @@ core/tools.py       Every kitchen action (shared by MCP, REST and the UI)
 core/recipes.py     Reads recipe pages (schema.org data) and pasted lists, cleans up ingredient names
 server/app.py       FastAPI server: REST at /api, MCP at /mcp, auth
 server/phone.py     Phone pairing, sessions and the phone page
-server/static/      Phone page HTML, CSS and JavaScript
+server/static/      Phone page HTML, CSS and JavaScript (mobile.js groceries, meals.js dinners)
 ui/main.py          Touchscreen app: screens, arrows, screen-name badge
 ui/grocery_screen.py  Grocery list screen
+ui/dinners_screen.py  Dinners week screen and its day panel
 ui/panels.py        Quick add and phone pairing pop-ups
 ui/clock_screen.py  Clock screen
 ui/api.py           Background-thread REST client for the app
@@ -209,7 +221,8 @@ requirements.txt    Pinned Python dependencies
 - [x] Add from your phone (QR pairing) and one-tap quick add
 - [x] Import ingredients from a recipe link (NYT Cooking and others) or a pasted list
 - [ ] Claude cleans up trickier ingredient lines and merges duplicates across recipes
-- [ ] More screens: today's meals, pantry, step-by-step cook mode
+- [x] Weekly dinner planner: recipes, cooks, take-out nights, move and delete, ingredients to the list
+- [ ] More screens: pantry, step-by-step cook mode from a dinner's recipe
 - [ ] "Plan my week" button: Claude builds a meal plan from what's in the pantry
 - [ ] Receipt scanning: photograph a receipt and Claude adds the items to the pantry with expiry dates
 - [ ] Runs as a service on the Pi, with nightly backups
