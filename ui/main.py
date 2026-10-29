@@ -21,11 +21,13 @@ from kivy.uix.label import Label
 from kivy.uix.screenmanager import ScreenManager, SlideTransition
 
 from ui.clock_screen import ClockScreen
+from ui.dinners_screen import DinnersScreen
 from ui.grocery_screen import GroceryScreen
 from ui.ui_common import debounced
 
 SCREENS = [
     ("grocery", "Grocery list", GroceryScreen),
+    ("dinners", "Dinners", DinnersScreen),
     ("clock", "Clock", ClockScreen),
 ]
 

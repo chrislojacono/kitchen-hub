@@ -12,7 +12,7 @@ def call(method, path, on_done, on_error=None, body=None):
     """Run an API request on a worker thread and hand the result back on the Kivy main thread."""
     def work():
         headers = {"Authorization": f"Bearer {os.environ.get('KITCHEN_TOKEN', '')}"}
-        data = b"" if method == "POST" else None
+        data = b"" if method in ("POST", "PUT") else None
         if body is not None:
             headers["Content-Type"] = "application/json"
             data = json.dumps(body).encode()
