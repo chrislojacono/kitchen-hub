@@ -17,6 +17,7 @@
             --accent: #1f9d63; --accent-text: #ffffff; --danger: #c62828; --line: #dde5e0; }
   }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
   body { margin: 0; background: var(--bg); color: var(--text); font: 17px/1.4 system-ui, -apple-system, sans-serif;
          padding-bottom: calc(24px + env(safe-area-inset-bottom)); }
   header { position: sticky; top: 0; z-index: 2; background: var(--bg); padding: calc(14px + env(safe-area-inset-top)) 16px 10px;
@@ -52,11 +53,41 @@
            border-radius: 12px; background: var(--danger); color: #fff; text-align: center; opacity: 0;
            transition: opacity .2s; pointer-events: none; }
   #toast.show { opacity: 1; }
+  #toast.ok { background: var(--accent); color: var(--accent-text); }
+  .title-side { display: flex; align-items: center; gap: 10px; }
+  .pill { background: var(--surface-2); color: var(--text); padding: 6px 14px; font-size: 15px; }
+  dialog { width: 100%; max-width: 100%; height: 100%; max-height: 100%; margin: 0; border: 0; padding: 0;
+           background: var(--bg); color: var(--text); }
+  dialog::backdrop { background: rgba(0, 0, 0, .6); }
+  .recipe-step { display: flex; flex-direction: column; gap: 12px; min-height: 100%;
+                 padding: calc(18px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom)); }
+  h2 { font-size: 22px; margin: 0; }
+  .hint { margin: 0; color: var(--muted); font-size: 15px; }
+  .error { margin: 0; color: var(--danger); font-size: 15px; }
+  textarea { font: inherit; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line);
+             background: var(--surface); color: var(--text); resize: vertical; }
+  textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .actions { display: flex; gap: 10px; justify-content: flex-end; }
+  .actions button { padding: 12px 18px; }
+  .actions.sticky { position: sticky; bottom: 0; margin-top: auto; padding-top: 10px; background: var(--bg); }
+  .actions .add { flex: 1; }
+  .ghost { background: var(--surface-2); color: var(--text); }
+  #recipe-source { color: var(--accent); font-size: 15px; margin-top: -6px; }
+  #recipe-items li { display: flex; align-items: flex-start; gap: 12px; padding: 10px 4px; border-bottom: 1px solid var(--line); }
+  #recipe-items input[type=checkbox] { flex: none; width: 24px; height: 24px; margin-top: 8px; accent-color: var(--accent); }
+  .ingredient { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .ingredient input { font: inherit; font-weight: 600; padding: 6px 8px; margin-left: -8px; border-radius: 8px; border: 1px solid transparent;
+                      background: transparent; color: var(--text); }
+  .ingredient input:focus { border-color: var(--line); background: var(--surface); outline: none; }
+  .ingredient small { color: var(--muted); font-size: 14px; overflow-wrap: anywhere; }
+  .tag { align-self: flex-start; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px;
+         background: var(--surface-2); color: var(--muted); }
+  .skipped .ingredient input { color: var(--muted); }
 </style>
 </head>
 <body>
 <header>
-  <div class="title"><h1>Grocery list</h1><span id="count"></span></div>
+  <div class="title"><h1>Grocery list</h1><span class="title-side"><span id="count"></span><button class="pill" id="recipe-open" type="button">Recipe</button></span></div>
   <form id="add-form" autocomplete="off">
     <input id="add-input" name="item" placeholder="Add an item, e.g. 2 avocados" maxlength="90" autocapitalize="sentences" enterkeyhint="done" aria-label="Item to add">
     <button class="add" type="submit">Add</button>
@@ -68,6 +99,22 @@
   <p class="empty" id="empty" hidden>Nothing on the list yet.</p>
   <button id="clear" hidden></button>
 </main>
+<dialog id="recipe" aria-labelledby="recipe-heading">
+  <form id="recipe-form" class="recipe-step">
+    <h2 id="recipe-heading">Add from a recipe</h2>
+    <p class="hint">Paste a recipe link (NYT Cooking and most recipe sites work) or paste the ingredient list.</p>
+    <textarea id="recipe-input" rows="6" maxlength="20000" placeholder="https://cooking.nytimes.com/recipes/..." aria-label="Recipe link or ingredients"></textarea>
+    <p class="error" id="recipe-error" role="alert" hidden></p>
+    <div class="actions"><button type="button" class="ghost" data-close>Cancel</button><button type="submit" class="add" id="recipe-read">Read recipe</button></div>
+  </form>
+  <section id="recipe-result" class="recipe-step" hidden>
+    <h2 id="recipe-title"></h2>
+    <a id="recipe-source" target="_blank" rel="noopener noreferrer"></a>
+    <p class="hint">Uncheck anything you already have. Tap a name to change it.</p>
+    <ul id="recipe-items"></ul>
+    <div class="actions sticky"><button type="button" class="ghost" id="recipe-back">Back</button><button type="button" class="add" id="recipe-add"></button></div>
+  </section>
+</dialog>
 <div id="toast" role="status"></div>
 <script src="/m/app.js"></script>
 </body>

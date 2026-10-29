@@ -26,10 +26,15 @@ async function api(method, path, body) {
   return response.json();
 }
 
-function showError(error) {
-  toast.textContent = error.message || "Couldn't reach the kitchen hub";
+function showToast(message, ok = true) {
+  toast.textContent = message;
+  toast.classList.toggle("ok", ok);
   toast.classList.add("show");
   setTimeout(() => toast.classList.remove("show"), 3000);
+}
+
+function showError(error) {
+  showToast(error.message || "Couldn't reach the kitchen hub", false);
 }
 
 function formatQty(item) {
@@ -137,3 +142,116 @@ document.addEventListener("visibilitychange", () => {
 });
 setInterval(() => { if (!document.hidden) refresh(); }, 15000);
 refresh();
+
+const recipeDialog = document.getElementById("recipe");
+const recipeForm = document.getElementById("recipe-form");
+const recipeInput = document.getElementById("recipe-input");
+const recipeError = document.getElementById("recipe-error");
+const recipeReadButton = document.getElementById("recipe-read");
+const recipeResult = document.getElementById("recipe-result");
+const recipeTitle = document.getElementById("recipe-title");
+const recipeSource = document.getElementById("recipe-source");
+const recipeItems = document.getElementById("recipe-items");
+const recipeAddButton = document.getElementById("recipe-add");
+
+function showRecipeStep(result) {
+  recipeForm.hidden = result;
+  recipeResult.hidden = !result;
+  recipeDialog.scrollTop = 0;
+}
+
+function selectedIngredients() {
+  return [...recipeItems.querySelectorAll("li")]
+    .filter((row) => row.querySelector("input[type=checkbox]").checked)
+    .map((row) => row.querySelector(".ingredient input").value.trim())
+    .filter(Boolean);
+}
+
+function updateAddButton() {
+  const count = selectedIngredients().length;
+  recipeAddButton.textContent = count ? `Add ${count} to list` : "Nothing selected";
+  recipeAddButton.disabled = count === 0;
+  recipeItems.querySelectorAll("li").forEach((row) => {
+    row.classList.toggle("skipped", !row.querySelector("input[type=checkbox]").checked);
+  });
+}
+
+function renderRecipe(recipe) {
+  recipeTitle.textContent = recipe.title;
+  recipeSource.hidden = !recipe.source;
+  if (recipe.source && /^https?:\/\//.test(recipe.source)) {
+    recipeSource.href = recipe.source;
+    recipeSource.textContent = new URL(recipe.source).hostname.replace(/^www\./, "");
+  }
+  recipeItems.replaceChildren(...recipe.ingredients.map((ingredient, index) => {
+    const row = document.createElement("li");
+    const box = document.createElement("input");
+    box.type = "checkbox";
+    box.checked = ingredient.suggested;
+    box.id = `ingredient-${index}`;
+    box.addEventListener("change", updateAddButton);
+    const details = document.createElement("div");
+    details.className = "ingredient";
+    const name = document.createElement("input");
+    name.value = ingredient.name;
+    name.maxLength = 80;
+    name.setAttribute("aria-label", `Grocery item for: ${ingredient.line}`);
+    name.addEventListener("input", updateAddButton);
+    const line = document.createElement("small");
+    line.textContent = ingredient.line;
+    details.append(name, line);
+    if (ingredient.in_pantry || ingredient.staple) {
+      const tag = document.createElement("span");
+      tag.className = "tag";
+      tag.textContent = ingredient.in_pantry ? "In pantry" : "Staple";
+      details.append(tag);
+    }
+    row.append(box, details);
+    return row;
+  }));
+  updateAddButton();
+  showRecipeStep(true);
+}
+
+document.getElementById("recipe-open").addEventListener("click", () => {
+  recipeInput.value = "";
+  recipeError.hidden = true;
+  showRecipeStep(false);
+  recipeDialog.showModal();
+  recipeInput.focus();
+});
+
+recipeDialog.querySelectorAll("[data-close]").forEach((button) => button.addEventListener("click", () => recipeDialog.close()));
+document.getElementById("recipe-back").addEventListener("click", () => showRecipeStep(false));
+
+recipeForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const text = recipeInput.value.trim();
+  if (!text) return;
+  recipeError.hidden = true;
+  recipeReadButton.disabled = true;
+  recipeReadButton.textContent = "Reading...";
+  try {
+    renderRecipe(await api("POST", "/api/recipes/read", { link_or_text: text }));
+  } catch (error) {
+    recipeError.textContent = error.message;
+    recipeError.hidden = false;
+  } finally {
+    recipeReadButton.disabled = false;
+    recipeReadButton.textContent = "Read recipe";
+  }
+});
+
+recipeAddButton.addEventListener("click", async () => {
+  const names = selectedIngredients();
+  recipeAddButton.disabled = true;
+  try {
+    await api("POST", "/api/grocery", names.map((name) => ({ name })));
+    recipeDialog.close();
+    showToast(`Added ${names.length} ${names.length === 1 ? "item" : "items"}`);
+    await refresh();
+  } catch (error) {
+    updateAddButton();
+    showError(error);
+  }
+});
