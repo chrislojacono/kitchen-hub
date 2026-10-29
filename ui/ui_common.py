@@ -41,7 +41,7 @@ def debounced(fn, seconds=TAP_DEBOUNCE_SECONDS):
 def fit_text(label, halign="left"):
     label.halign = halign
     label.valign = "middle"
-    label.bind(size=lambda inst, _: setattr(inst, "text_size", (inst.width - 2 * inst.padding_x, inst.height)))
+    label.bind(size=lambda inst, _: setattr(inst, "text_size", (inst.width, inst.height)))
     return label
 
 
@@ -62,7 +62,7 @@ class CardButton(Button):
     def __init__(self, radius=16, halign="center", bg=CARD_COLOR, color=BODY_TEXT, padding_x=24, **kwargs):
         super().__init__(background_normal="", background_down="", background_disabled_normal="",
                          background_color=(0, 0, 0, 0), color=color, markup=True,
-                         padding_x=padding_x, **kwargs)
+                         padding=[padding_x, 0, padding_x, 0], **kwargs)
         self._bg_alpha = bg[3]
         with self.canvas.before:
             self._bg = Color(*bg)

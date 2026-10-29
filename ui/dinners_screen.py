@@ -62,9 +62,11 @@ class DayCard(ButtonBehavior, BoxLayout):
         self.title = Label(font_size=18, color=BODY_TEXT, halign="center", valign="top", max_lines=7)
         self.title.bind(size=lambda inst, _: setattr(inst, "text_size", (inst.width, inst.height)))
         self.chip = Chip()
+        self.notes = Label(font_size=14, color=ACCENT_TEXT, halign="center", valign="bottom", max_lines=4)
+        self.notes.bind(size=lambda inst, _: setattr(inst, "text_size", (inst.width, inst.height)))
         self.extra = Label(font_size=13, size_hint=(1, None), height=18, color=ACCENT_TEXT)
         for widget in (self.day_label, self.date_label, Widget(size_hint=(1, None), height=4), self.title,
-                       self.chip, self.extra):
+                       self.notes, self.chip, self.extra):
             self.add_widget(widget)
 
     def _update(self, *_):
@@ -82,11 +84,13 @@ class DayCard(ButtonBehavior, BoxLayout):
         if meal is None:
             self.title.text, self.title.color = "+", ACCENT_TEXT
             self.chip.set("")
+            self.notes.text = ""
             self.extra.text = ""
             return
         self.title.text = meal["title"]
         self.title.color = TAKEOUT_TEXT if meal["takeout"] else BODY_TEXT
-        if meal["cook"]:
+        self.notes.text = meal.get("notes") or ""
+        if meal["cook"] and not meal["takeout"]:
             self.chip.set(meal["cook"], cook_color(cooks, meal["cook"]))
         else:
             self.chip.set("Take-Out!" if meal["takeout"] and meal["title"] != "Take-Out!" else "",
@@ -128,12 +132,14 @@ class DinnerPanel(Panel):
         self.day, self.meal, self.cooks, self.week = None, None, [], []
 
         box = BoxLayout(orientation="vertical", padding=26, spacing=14)
-        header = BoxLayout(size_hint=(1, None), height=76)
+        header = BoxLayout(size_hint=(1, None), height=96)
         titles = BoxLayout(orientation="vertical")
         self.day_label = fit_text(Label(font_size=17, color=ACCENT_TEXT))
         self.title_label = fit_text(Label(font_size=28, bold=True, color=BODY_TEXT, shorten=True))
+        self.notes_label = fit_text(Label(font_size=17, color=ACCENT_TEXT, shorten=True))
         titles.add_widget(self.day_label)
         titles.add_widget(self.title_label)
+        titles.add_widget(self.notes_label)
         header.add_widget(titles)
         close = CardButton(text="Done", font_size=22, bold=True, bg=ACCENT, color=ON_ACCENT, size_hint=(None, 1),
                            width=140)
@@ -192,10 +198,13 @@ class DinnerPanel(Panel):
         meal = self.meal
         self.day_label.text = f"{self.day:%A}, {self.day:%B} {self.day.day}"
         self.title_label.text = meal["title"] if meal else "Nothing planned yet"
-        self._show(self.cook_row, meal is not None)
+        notes = (meal or {}).get("notes") or ""
+        self.notes_label.text = f"From: {notes}" if notes and meal["takeout"] else notes
+        show_cooks = meal is not None and not meal["takeout"]
+        self._show(self.cook_row, show_cooks)
         options = self.cooks[:3] + [None]
         for index, button in enumerate(self.cook_buttons):
-            if index >= len(options) or meal is None:
+            if index >= len(options) or not show_cooks:
                 self._show(button, False)
                 continue
             cook = options[index]
@@ -232,7 +241,7 @@ class DinnerPanel(Panel):
         self.on_change()
 
     def _put(self, changes):
-        body = {key: self.meal[key] for key in ("title", "recipe", "cook", "takeout")} if self.meal else {}
+        body = {key: self.meal.get(key) for key in ("title", "recipe", "cook", "takeout", "notes")} if self.meal else {}
         body.update(changes)
         api.call("PUT", f"/api/meals/{self.day.isoformat()}", self._saved, lambda e: self._failed(e), body=body)
 
