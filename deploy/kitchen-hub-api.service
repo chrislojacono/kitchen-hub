@@ -1,0 +1,17 @@
+[Unit]
+Description=Kitchen Hub server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=@USER@
+WorkingDirectory=@DIR@
+ExecStart=@DIR@/venv/bin/python -m uvicorn server.app:app --env-file .env --host 0.0.0.0 --port 8000
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+
+[Install]
+WantedBy=multi-user.target

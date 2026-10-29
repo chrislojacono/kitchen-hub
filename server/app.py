@@ -5,8 +5,14 @@ from typing import NotRequired, TypedDict
 
 from fastapi import Body, FastAPI, Request
 from fastapi.responses import JSONResponse
-from mcp.server.mcpserver import MCPServer
-from mcp.server.mcpserver.exceptions import ToolError
+
+try:
+    from mcp.server.mcpserver import MCPServer
+    from mcp.server.mcpserver.exceptions import ToolError
+except ImportError:
+    # A Pi whose compiled dependencies won't install can run on Debian's FastAPI without the MCP SDK
+    # (see deploy/install-pi.sh); everything except /mcp still works.
+    MCPServer = None
 
 from core import tools
 from server import phone
@@ -26,11 +32,6 @@ TOOLS = [
     tools.get_cooks, tools.move_meal, tools.get_meal_ingredients,
 ]
 
-mcp = MCPServer(
-    "kitchen-hub",
-    instructions="Household kitchen: pantry inventory with expiry dates, a meal plan, and a grocery list. "
-                 "Dates are YYYY-MM-DD.",
-)
 
 
 def _tool(fn):
@@ -43,13 +44,19 @@ def _tool(fn):
     return wrapper
 
 
-for fn in TOOLS:
-    mcp.add_tool(_tool(fn))
+mcp = None
+if MCPServer:
+    mcp = MCPServer(
+        "kitchen-hub",
+        instructions="Household kitchen: pantry inventory with expiry dates, a meal plan, and a grocery list. "
+                     "Dates are YYYY-MM-DD.",
+    )
+    for fn in TOOLS:
+        mcp.add_tool(_tool(fn))
+    # host="0.0.0.0" turns off the SDK's localhost-only DNS-rebinding check so tailnet hostnames work; the bearer token below covers it
+    mcp_app = mcp.streamable_http_app(stateless_http=True, json_response=True, host="0.0.0.0")
 
-# host="0.0.0.0" turns off the SDK's localhost-only DNS-rebinding check so tailnet hostnames work; the bearer token below covers it
-mcp_app = mcp.streamable_http_app(stateless_http=True, json_response=True, host="0.0.0.0")
-
-app = FastAPI(title="Kitchen Hub", lifespan=lambda _: mcp.session_manager.run())
+app = FastAPI(title="Kitchen Hub", lifespan=(lambda _: mcp.session_manager.run()) if mcp else None)
 
 
 @app.middleware("http")
@@ -152,4 +159,5 @@ def read_recipe(link_or_text: str = Body(embed=True, max_length=20_000)):
 
 
 app.include_router(phone.router)
-app.mount("/", mcp_app)
+if mcp:
+    app.mount("/", mcp_app)

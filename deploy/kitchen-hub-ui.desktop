@@ -1,0 +1,5 @@
+[Desktop Entry]
+Type=Application
+Name=Kitchen Hub
+Exec=@DIR@/deploy/kitchen-hub-ui.sh
+X-GNOME-Autostart-enabled=true

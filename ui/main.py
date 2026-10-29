@@ -11,6 +11,7 @@ Config.set("graphics", "height", "600")
 Config.set("graphics", "resizable", "0")
 if sys.platform.startswith("linux"):
     Config.set("graphics", "fullscreen", "auto")
+    Config.set("graphics", "show_cursor", "0")
 
 from kivy.app import App
 from kivy.clock import Clock
