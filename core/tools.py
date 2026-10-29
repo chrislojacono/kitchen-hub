@@ -1,4 +1,5 @@
 import json
+import os
 import re
 from contextlib import contextmanager
 from datetime import date, timedelta
@@ -25,6 +26,7 @@ class GroceryItemIn(TypedDict):
 
 MAX_NAME_LENGTH = 80
 MAX_TITLE_LENGTH = 120
+MAX_RECIPE_BYTES = 100_000
 STAPLES = ["Milk", "Eggs", "Bread", "Butter", "Bananas", "Apples", "Onions", "Garlic",
            "Chicken", "Rice", "Pasta", "Cheese", "Yogurt", "Coffee", "Tomatoes", "Spinach"]
 
@@ -103,29 +105,75 @@ def get_expiring(days: int = 3) -> list[dict]:
             (cutoff,)))
 
 
+def get_cooks() -> list[str]:
+    """The people a meal can be assigned to cook."""
+    return [name.strip() for name in os.environ.get("KITCHEN_COOKS", "").split(",") if name.strip()]
+
+
+def _meal(row):
+    meal = dict(row)
+    raw = meal.pop("recipe_json")
+    meal["recipe"] = json.loads(raw) if raw else None
+    meal["takeout"] = bool(meal["takeout"])
+    return meal
+
+
 def get_meal_plan(start: str | None = None, days: int = 7) -> list[dict]:
     """List planned meals for a range of days starting at start (YYYY-MM-DD, default today)."""
     first = date.fromisoformat(start) if start else date.today()
     last = first + timedelta(days=days - 1)
     with _tx() as conn:
-        meals = _rows(conn.execute(
+        return [_meal(row) for row in conn.execute(
             f"SELECT * FROM meals WHERE date BETWEEN ? AND ? ORDER BY date, {SLOT_ORDER}",
-            (first.isoformat(), last.isoformat())))
-    for meal in meals:
-        raw = meal.pop("recipe_json")
-        meal["recipe"] = json.loads(raw) if raw else None
-    return meals
+            (first.isoformat(), last.isoformat()))]
 
 
-def set_meal(day: str, slot: Slot, title: str, recipe: dict | None = None) -> dict:
-    """Plan a meal, replacing whatever was in that slot. day is YYYY-MM-DD, slot is breakfast, lunch,
-    dinner or snack. recipe is optional: a dict such as {"ingredients": [...], "steps": [...]}."""
+def set_meal(day: str, slot: Slot, title: str, recipe: dict | None = None, cook: str | None = None,
+             takeout: bool = False) -> dict:
+    """Plan a meal, replacing whatever was in that slot. day is YYYY-MM-DD; slot is breakfast, lunch, dinner or
+    snack (this household plans dinner only). cook is one of get_cooks() or null. takeout marks a take-out night.
+    recipe is optional, e.g. {"title": ..., "source": url, "lines": ["2 cups rice", ...], "steps": [...]}."""
+    cooks = get_cooks()
+    if cook is not None and cook not in cooks:
+        raise ValueError(f"cook must be one of: {', '.join(cooks) or 'nobody yet (set KITCHEN_COOKS)'}")
+    recipe_json = json.dumps(recipe) if recipe else None
+    if recipe_json and len(recipe_json) > MAX_RECIPE_BYTES:
+        raise ValueError("That recipe is too large")
     with _tx() as conn:
         conn.execute(
-            "INSERT INTO meals (date, slot, title, recipe_json) VALUES (?, ?, ?, ?) "
-            "ON CONFLICT (date, slot) DO UPDATE SET title = excluded.title, recipe_json = excluded.recipe_json",
-            (_iso(day), slot, _text(title, MAX_TITLE_LENGTH), json.dumps(recipe) if recipe else None))
-    return {"date": _iso(day), "slot": slot, "title": _text(title, MAX_TITLE_LENGTH)}
+            "INSERT INTO meals (date, slot, title, recipe_json, cook, takeout) VALUES (?, ?, ?, ?, ?, ?) "
+            "ON CONFLICT (date, slot) DO UPDATE SET title = excluded.title, recipe_json = excluded.recipe_json, "
+            "cook = excluded.cook, takeout = excluded.takeout",
+            (_iso(day), slot, _text(title, MAX_TITLE_LENGTH), recipe_json, cook, int(takeout)))
+        return _meal(conn.execute("SELECT * FROM meals WHERE date = ? AND slot = ?", (_iso(day), slot)).fetchone())
+
+
+def move_meal(day: str, to_day: str, slot: Slot = "dinner") -> list[dict]:
+    """Move a planned meal to another day. If that day already has a meal in the slot, the two swap.
+    Returns the meals on both days afterwards."""
+    source, target = _iso(day), _iso(to_day)
+    with _tx() as conn:
+        if conn.execute("SELECT 1 FROM meals WHERE date = ? AND slot = ?", (source, slot)).fetchone() is None:
+            raise ValueError(f"No {slot} planned on {source}")
+        if source != target:
+            conn.execute("UPDATE meals SET date = 'moving' WHERE date = ? AND slot = ?", (source, slot))
+            conn.execute("UPDATE meals SET date = ? WHERE date = ? AND slot = ?", (source, target, slot))
+            conn.execute("UPDATE meals SET date = ? WHERE date = 'moving' AND slot = ?", (target, slot))
+        return [_meal(row) for row in conn.execute(
+            "SELECT * FROM meals WHERE date IN (?, ?) AND slot = ? ORDER BY date", (source, target, slot))]
+
+
+def get_meal_ingredients(day: str, slot: Slot = "dinner") -> list[dict]:
+    """List a planned meal's recipe ingredients as grocery items, flagging what's already in the pantry and
+    staples like salt, ready to add with add_grocery_items. Empty if the meal has no recipe."""
+    with _tx() as conn:
+        row = conn.execute("SELECT recipe_json FROM meals WHERE date = ? AND slot = ?", (_iso(day), slot)).fetchone()
+    if row is None:
+        raise ValueError(f"No {slot} planned on {_iso(day)}")
+    recipe = json.loads(row["recipe_json"]) if row["recipe_json"] else {}
+    lines = recipe.get("lines") or [item if isinstance(item, str) else item.get("line") or item.get("name")
+                                    for item in recipe.get("ingredients", [])]
+    return _flag_ingredients([line for line in lines if line])
 
 
 def remove_meal(day: str, slot: Slot) -> bool:
@@ -207,14 +255,19 @@ def read_recipe(link_or_text: str) -> dict:
         recipe = {"title": "Pasted ingredients", "lines": recipes.parse_ingredient_text(text), "steps": [], "source": None}
         if not recipe["lines"]:
             raise ValueError("Paste a recipe link or at least one ingredient line")
+    return {"title": recipe["title"], "source": recipe["source"], "lines": recipe["lines"],
+            "ingredients": _flag_ingredients(recipe["lines"]), "steps": recipe["steps"]}
+
+
+def _flag_ingredients(lines):
     with _tx() as conn:
         pantry = [r["name"].lower() for r in conn.execute("SELECT name FROM pantry_items")]
     ingredients = []
-    for line in recipe["lines"]:
+    for line in lines:
         name = recipes.ingredient_name(line)
         lowered = name.lower()
         in_pantry = any(item == lowered or (len(item) >= 3 and item in lowered) for item in pantry)
         staple = recipes.is_staple(name)
         ingredients.append({"line": line, "name": name, "in_pantry": in_pantry, "staple": staple,
                             "suggested": not (in_pantry or staple)})
-    return {"title": recipe["title"], "source": recipe["source"], "ingredients": ingredients, "steps": recipe["steps"]}
+    return ingredients

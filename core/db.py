@@ -56,9 +56,22 @@ CREATE TABLE IF NOT EXISTS receipts (
 """
 
 
+MIGRATIONS = [
+    "ALTER TABLE meals ADD COLUMN cook TEXT",
+    "ALTER TABLE meals ADD COLUMN takeout INTEGER NOT NULL DEFAULT 0 CHECK (takeout IN (0, 1))",
+]
+
+
 def connect(path=None):
     conn = sqlite3.connect(path or DB_PATH)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode = WAL")
     conn.executescript(SCHEMA)
+    if conn.execute("PRAGMA user_version").fetchone()[0] < len(MIGRATIONS):
+        conn.execute("BEGIN IMMEDIATE")
+        version = conn.execute("PRAGMA user_version").fetchone()[0]
+        for statement in MIGRATIONS[version:]:
+            conn.execute(statement)
+        conn.execute(f"PRAGMA user_version = {len(MIGRATIONS)}")
+        conn.commit()
     return conn

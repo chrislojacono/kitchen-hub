@@ -1,3 +1,5 @@
+import os
+import sqlite3
 import tempfile
 from datetime import date, timedelta
 from pathlib import Path
@@ -97,7 +99,52 @@ def test_names_validated():
             pass
 
 
+def test_dinner_plan():
+    _fresh_db()
+    os.environ["KITCHEN_COOKS"] = "Alex, Sam"
+    assert tools.get_cooks() == ["Alex", "Sam"]
+    tools.add_pantry_items([{"name": "Rice"}])
+    tacos = tools.set_meal(_day(0), "dinner", "Tacos", cook="Alex",
+                           recipe={"lines": ["1 lb ground beef", "2 cups rice", "Kosher salt"]})
+    assert tacos["cook"] == "Alex" and tacos["takeout"] is False and tacos["recipe"]["lines"][0] == "1 lb ground beef"
+    tools.set_meal(_day(2), "dinner", "Take-Out!", takeout=True)
+    try:
+        tools.set_meal(_day(1), "dinner", "Soup", cook="Nobody")
+        raise AssertionError("accepted an unknown cook")
+    except ValueError:
+        pass
+
+    assert [(i["name"], i["suggested"]) for i in tools.get_meal_ingredients(_day(0))] == [
+        ("Ground beef", True), ("Rice", False), ("Kosher salt", False)]
+    assert tools.get_meal_ingredients(_day(2)) == []
+
+    moved = tools.move_meal(_day(0), _day(1))
+    assert [(m["date"], m["title"]) for m in moved] == [(_day(1), "Tacos")]
+    swapped = tools.move_meal(_day(1), _day(2))
+    assert [(m["date"], m["title"], m["takeout"]) for m in swapped] == [
+        (_day(1), "Take-Out!", True), (_day(2), "Tacos", False)]
+    assert tools.get_meal_plan()[1]["cook"] == "Alex"
+    try:
+        tools.move_meal(_day(5), _day(6))
+        raise AssertionError("moved a missing meal")
+    except ValueError:
+        pass
+
+
+def test_old_database_upgraded():
+    path = Path(tempfile.mkdtemp()) / "old.db"
+    with sqlite3.connect(path) as conn:
+        conn.execute("CREATE TABLE meals (id INTEGER PRIMARY KEY, date TEXT NOT NULL, slot TEXT NOT NULL, "
+                     "title TEXT NOT NULL, recipe_json TEXT, UNIQUE (date, slot))")
+        conn.execute("INSERT INTO meals (date, slot, title) VALUES ('2026-01-01', 'dinner', 'Old meal')")
+    db.DB_PATH = path
+    meal = tools.get_meal_plan("2026-01-01", 1)[0]
+    assert meal["title"] == "Old meal" and meal["cook"] is None and meal["takeout"] is False
+    db.connect().close()
+
+
 if __name__ == "__main__":
-    for test in (test_pantry, test_meals, test_grocery, test_frequent_groceries, test_names_validated):
+    for test in (test_pantry, test_meals, test_grocery, test_frequent_groceries, test_names_validated,
+                 test_dinner_plan, test_old_database_upgraded):
         test()
         print(f"{test.__name__} ok")
