@@ -2,7 +2,7 @@ import os
 import secrets
 from functools import wraps
 
-from fastapi import FastAPI, Request
+from fastapi import Body, FastAPI, Request
 from fastapi.responses import JSONResponse
 from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
@@ -21,7 +21,7 @@ TOOLS = [
     tools.get_pantry, tools.add_pantry_items, tools.use_pantry_item, tools.get_expiring,
     tools.get_meal_plan, tools.set_meal, tools.remove_meal,
     tools.get_grocery_list, tools.add_grocery_items, tools.check_grocery_item, tools.clear_checked_groceries,
-    tools.get_frequent_groceries,
+    tools.get_frequent_groceries, tools.read_recipe,
 ]
 
 mcp = MCPServer(
@@ -108,6 +108,11 @@ def check_grocery(item_id: int, checked: bool = True):
 @app.post("/api/grocery/clear-checked")
 def clear_checked_groceries():
     return {"removed": tools.clear_checked_groceries()}
+
+
+@app.post("/api/recipes/read")
+def read_recipe(link_or_text: str = Body(embed=True, max_length=20_000)):
+    return tools.read_recipe(link_or_text)
 
 
 app.include_router(phone.router)
