@@ -15,6 +15,7 @@ A kitchen assistant that runs on a Raspberry Pi with a touchscreen. It keeps tra
 - **Grocery list:** add and check off items. Adding something already on the list merges it instead of creating a duplicate, and re-adding something you checked off brings it back.
 - **Touchscreen app:** a big-button kitchen display. Tap an item to check it off; it dims in place so nothing moves under your finger. **+ Add** shows one-tap buttons for the things you buy most.
 - **Phone page:** tap **Phone** on the touchscreen and scan the QR code. Your phone gets the grocery list with a text box for adding anything, suggestion chips, and check-offs. Type `2 avocados` and it records the quantity. Save it to your home screen and it works like an app.
+- **Recipe import:** on the phone page, tap **Recipe** and paste a recipe link (NYT Cooking and most recipe sites work) or an ingredient list. You get a checklist of grocery items, cleaned up from lines like "2 cups minus 2 tablespoons cake flour" to "Cake flour". Anything already in your pantry, and staples like salt and water, start unchecked. You can rename items before adding them.
 - **Claude integration:** any MCP client, such as Claude Code, can read and change all of the above. Ask "what's expiring this week?" or "add milk and eggs to the grocery list".
 
 ## How it works
@@ -72,6 +73,7 @@ flowchart LR
    ```bash
    venv/Scripts/python -m tests.test_tools
    venv/Scripts/python -m tests.test_server
+   venv/Scripts/python -m tests.test_recipes
    ```
    Use `venv/bin/python` on Linux. Every line should end in `ok`.
 
@@ -94,6 +96,8 @@ flowchart LR
    It opens a 1024x600 window on Windows and goes fullscreen on Linux. It reads the same `.env`, so it uses your token automatically.
 
 7. **Connect your phone.** Tap **Phone** on the touchscreen and scan the code with your phone's camera. Your phone has to be on the same network as the server (or on Tailscale). Then use your browser's "Add to Home Screen". Set `KITCHEN_PUBLIC_URL` if the QR code should use a hostname instead of the server's local IP; see [Configuration](#configuration).
+
+<img src="docs/recipe-import.jpg" alt="Importing an NYT Cooking recipe on a phone" width="260">
 
 ![Quick add on the touchscreen](docs/quick-add.png)
 ![Pairing a phone](docs/phone-pairing.png)
@@ -130,6 +134,7 @@ From another device, replace `localhost` with the server's hostname (for example
 | `check_grocery_item` | Check or uncheck an item |
 | `clear_checked_groceries` | Delete checked-off items |
 | `get_frequent_groceries` | Suggest items to re-add: the most bought first, then common staples |
+| `read_recipe` | Read a recipe link or pasted ingredients into grocery items, flagging pantry items and staples (adds nothing) |
 
 ### REST API
 
@@ -141,6 +146,7 @@ From another device, replace `localhost` with the server's hostname (for example
 | GET | `/api/grocery?include_checked=false` | Grocery list |
 | POST | `/api/grocery` | Add items, body: `[{"name": "Milk", "qty": 2, "unit": "L"}]` |
 | GET | `/api/grocery/frequent?limit=12` | Suggested items to re-add |
+| POST | `/api/recipes/read` | Body `{"link_or_text": "..."}`: the recipe's title, ingredients as grocery items, and steps |
 | POST | `/api/grocery/{id}/check?checked=true` | Check or uncheck an item |
 | POST | `/api/grocery/clear-checked` | Delete checked-off items |
 
@@ -169,6 +175,7 @@ Settings are read from `.env` (see `.env.example`).
   curl -X POST -H "Authorization: Bearer <KITCHEN_TOKEN>" http://localhost:8000/api/phones/revoke-all
   ```
 - **The phone page is locked down.** It has a strict Content-Security-Policy, renders item names as text and never as HTML, and refuses to be framed.
+- **Recipe links are fetched carefully.** Only `http`/`https` links on the standard ports are fetched, and only when every address the host resolves to is a public internet address, checked again on every redirect. That means a link can't be used to reach the Pi itself, Pi-hole or anything else on your network. Pages are capped at 3 MB (including after decompression), with a 10-second timeout. The server identifies itself honestly as `KitchenHub/1.0`, fetches only the page you asked for, and never signs in to any site.
 - **Input is validated.** Item names are trimmed and limited to 80 characters, and dates and meal slots are checked.
 - **Network.** Even with the token, run the server only on your home network or a private network like Tailscale. Don't port-forward it to the internet.
 - **Database.** `kitchen.db` is gitignored and never leaves the device except in your own backups.
@@ -178,6 +185,7 @@ Settings are read from `.env` (see `.env.example`).
 ```
 core/db.py          SQLite schema and connection
 core/tools.py       Every kitchen action (shared by MCP, REST and the UI)
+core/recipes.py     Reads recipe pages (schema.org data) and pasted lists, cleans up ingredient names
 server/app.py       FastAPI server: REST at /api, MCP at /mcp, auth
 server/phone.py     Phone pairing, sessions and the phone page
 server/static/      Phone page HTML, CSS and JavaScript
@@ -187,7 +195,7 @@ ui/panels.py        Quick add and phone pairing pop-ups
 ui/clock_screen.py  Clock screen
 ui/api.py           Background-thread REST client for the app
 ui/ui_common.py     Shared look: gradients, cards, buttons, tap debounce
-tests/              Tests for the tools, auth and phone pairing (temporary databases)
+tests/              Tests for the tools, recipes, auth and phone pairing (temporary databases)
 docs/               Screenshots
 .env.example        The settings you need, with no values
 requirements.txt    Pinned Python dependencies
@@ -199,6 +207,8 @@ requirements.txt    Pinned Python dependencies
 - [x] REST API and MCP server
 - [x] Touchscreen app with the grocery list and a clock
 - [x] Add from your phone (QR pairing) and one-tap quick add
+- [x] Import ingredients from a recipe link (NYT Cooking and others) or a pasted list
+- [ ] Claude cleans up trickier ingredient lines and merges duplicates across recipes
 - [ ] More screens: today's meals, pantry, step-by-step cook mode
 - [ ] "Plan my week" button: Claude builds a meal plan from what's in the pantry
 - [ ] Receipt scanning: photograph a receipt and Claude adds the items to the pantry with expiry dates
