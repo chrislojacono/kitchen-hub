@@ -6,7 +6,7 @@ import time
 from contextlib import closing
 from pathlib import Path
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 
 from core import db
@@ -21,6 +21,8 @@ SECURITY_HEADERS = {
     "Referrer-Policy": "no-referrer",
     "Cache-Control": "no-store",
 }
+
+SCRIPTS = {"app": "mobile.js", "meals": "meals.js"}
 
 router = APIRouter()
 _pair_codes = {}
@@ -89,6 +91,8 @@ def mobile_page(request: Request):
     return FileResponse(STATIC / "mobile.html", headers=SECURITY_HEADERS)
 
 
-@router.get("/m/app.js")
-def mobile_script():
-    return FileResponse(STATIC / "mobile.js", media_type="text/javascript", headers=SECURITY_HEADERS)
+@router.get("/m/{script}.js")
+def mobile_script(script: str):
+    if script not in SCRIPTS:
+        raise HTTPException(status_code=404)
+    return FileResponse(STATIC / SCRIPTS[script], media_type="text/javascript", headers=SECURITY_HEADERS)

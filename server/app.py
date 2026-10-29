@@ -15,7 +15,7 @@ TOKEN = os.environ.get("KITCHEN_TOKEN", "")
 if len(TOKEN) < 32:
     raise RuntimeError("Set KITCHEN_TOKEN to a random value of at least 32 characters (see README)")
 
-OPEN_PATHS = {"/docs", "/openapi.json", "/pair", "/m", "/m/app.js"}
+OPEN_PATHS = {"/docs", "/openapi.json", "/pair", "/m", "/m/app.js", "/m/meals.js"}
 BEARER_ONLY_PREFIXES = ("/api/pair", "/api/phones/")
 
 TOOLS = [

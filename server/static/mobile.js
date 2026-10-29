@@ -213,7 +213,11 @@ function renderRecipe(recipe) {
   showRecipeStep(true);
 }
 
+const recipeBackButton = document.getElementById("recipe-back");
+
 document.getElementById("recipe-open").addEventListener("click", () => {
+  recipeDialog.dataset.mode = "";
+  recipeBackButton.textContent = "Back";
   recipeInput.value = "";
   recipeError.hidden = true;
   showRecipeStep(false);
@@ -222,7 +226,10 @@ document.getElementById("recipe-open").addEventListener("click", () => {
 });
 
 recipeDialog.querySelectorAll("[data-close]").forEach((button) => button.addEventListener("click", () => recipeDialog.close()));
-document.getElementById("recipe-back").addEventListener("click", () => showRecipeStep(false));
+recipeBackButton.addEventListener("click", () => {
+  if (recipeDialog.dataset.mode === "meal") recipeDialog.close();
+  else showRecipeStep(false);
+});
 
 recipeForm.addEventListener("submit", async (event) => {
   event.preventDefault();

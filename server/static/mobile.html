@@ -83,9 +83,46 @@
   .tag { align-self: flex-start; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px;
          background: var(--surface-2); color: var(--muted); }
   .skipped .ingredient input { color: var(--muted); }
+  body { padding-bottom: calc(80px + env(safe-area-inset-bottom)); }
+  .tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 3; display: flex; gap: 8px; background: var(--bg);
+          border-top: 1px solid var(--line); padding: 8px 16px calc(8px + env(safe-area-inset-bottom)); }
+  .tabs button { flex: 1; background: transparent; color: var(--muted); padding: 12px; font-weight: 600; }
+  .tabs button[aria-current=page] { background: var(--surface-2); color: var(--text); }
+  .week-nav { gap: 6px; color: var(--muted); font-size: 15px; }
+  .week-nav .pill { padding: 4px 12px; font-size: 20px; line-height: 1; }
+  #days { display: flex; flex-direction: column; gap: 8px; }
+  .day { width: 100%; display: flex; gap: 14px; align-items: center; text-align: left; background: var(--surface);
+         color: var(--text); padding: 14px; min-height: 68px; }
+  .day.today { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .day-date { flex: none; width: 52px; display: flex; flex-direction: column; color: var(--muted); font-size: 13px; }
+  .day-date b { color: var(--text); font-size: 17px; }
+  .day-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+  .day-title { font-weight: 600; overflow-wrap: anywhere; }
+  .day-empty { color: var(--muted); }
+  .badges { display: flex; flex-wrap: wrap; gap: 6px; }
+  .badge { font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 999px; background: var(--surface-2); color: var(--muted); }
+  .badge.cook-0 { background: #1f5b43; color: #c9f5df; }
+  .badge.cook-1 { background: #2a4472; color: #d4e2ff; }
+  .badge.cook-2 { background: #6b4320; color: #ffe2c4; }
+  .badge.takeout { background: #6b2d3a; color: #ffd6de; }
+  .takeout-title { color: #ff9fb2; }
+  .field { display: flex; flex-direction: column; gap: 8px; font-size: 15px; color: var(--muted); }
+  .field input, .field select { font: inherit; font-size: 17px; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line);
+                                background: var(--surface); color: var(--text); }
+  .segments { display: flex; gap: 8px; flex-wrap: wrap; }
+  .segments button, .toggle { background: var(--surface-2); color: var(--text); padding: 10px 16px; }
+  .segments button[aria-pressed=true], .toggle[aria-pressed=true] { background: var(--accent); color: var(--accent-text); font-weight: 600; }
+  .toggle { align-self: flex-start; }
+  .recipe-summary { display: flex; justify-content: space-between; gap: 10px; align-items: center; background: var(--surface);
+                    color: var(--text); padding: 12px 14px; border-radius: 12px; }
+  #meal-recipe-entry { display: flex; flex-direction: column; gap: 8px; }
+  #meal-recipe-entry .ghost { align-self: flex-start; padding: 10px 16px; }
+  .link { background: none; color: var(--accent); padding: 0; }
+  .danger { background: transparent; color: var(--danger); margin-right: auto; }
 </style>
 </head>
 <body>
+<section id="view-groceries">
 <header>
   <div class="title"><h1>Grocery list</h1><span class="title-side"><span id="count"></span><button class="pill" id="recipe-open" type="button">Recipe</button></span></div>
   <form id="add-form" autocomplete="off">
@@ -99,6 +136,50 @@
   <p class="empty" id="empty" hidden>Nothing on the list yet.</p>
   <button id="clear" hidden></button>
 </main>
+</section>
+<section id="view-meals" hidden>
+<header>
+  <div class="title"><h1>Dinners</h1>
+    <span class="title-side week-nav">
+      <button class="pill" id="week-prev" type="button" aria-label="Previous week">&lsaquo;</button>
+      <span id="week-label"></span>
+      <button class="pill" id="week-next" type="button" aria-label="Next week">&rsaquo;</button>
+    </span>
+  </div>
+</header>
+<main><ul id="days"></ul></main>
+</section>
+<nav class="tabs" aria-label="Sections">
+  <button type="button" data-view="groceries" aria-current="page">Groceries</button>
+  <button type="button" data-view="meals">Dinners</button>
+</nav>
+<dialog id="meal" aria-labelledby="meal-heading">
+  <form id="meal-form" class="recipe-step">
+    <h2 id="meal-heading"></h2>
+    <label class="field">What's for dinner?
+      <input id="meal-title" maxlength="120" autocapitalize="sentences" placeholder="e.g. Sheet-pan chicken" required>
+    </label>
+    <button type="button" class="toggle" id="meal-takeout" aria-pressed="false">Take-Out!</button>
+    <div class="field">Who's cooking?<div class="segments" id="meal-cooks"></div></div>
+    <div class="field">Recipe
+      <div id="meal-recipe-summary" class="recipe-summary" hidden>
+        <span id="meal-recipe-text"></span><button type="button" class="link" id="meal-recipe-remove">Remove</button>
+      </div>
+      <div id="meal-recipe-entry">
+        <textarea id="meal-recipe-input" rows="3" maxlength="20000" placeholder="Optional: paste a recipe link or ingredients"></textarea>
+        <button type="button" class="ghost" id="meal-recipe-read">Read recipe</button>
+      </div>
+      <button type="button" class="ghost" id="meal-ingredients" hidden>Add ingredients to grocery list</button>
+    </div>
+    <label class="field">Day<select id="meal-day"></select></label>
+    <p class="error" id="meal-error" role="alert" hidden></p>
+    <div class="actions sticky">
+      <button type="button" class="danger" id="meal-delete">Delete</button>
+      <button type="button" class="ghost" data-close>Cancel</button>
+      <button type="submit" class="add">Save</button>
+    </div>
+  </form>
+</dialog>
 <dialog id="recipe" aria-labelledby="recipe-heading">
   <form id="recipe-form" class="recipe-step">
     <h2 id="recipe-heading">Add from a recipe</h2>
@@ -117,5 +198,6 @@
 </dialog>
 <div id="toast" role="status"></div>
 <script src="/m/app.js"></script>
+<script src="/m/meals.js"></script>
 </body>
 </html>
