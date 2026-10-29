@@ -2,13 +2,16 @@
 
 A kitchen assistant that runs on a Raspberry Pi with a touchscreen. It keeps track of your **pantry**, **meal plan** and **grocery list**, and lets Claude manage all three through an [MCP](https://modelcontextprotocol.io) server.
 
-> **Status:** the data layer, REST API and MCP server work today. The touchscreen app, the "plan my week" agent and receipt scanning are coming next (see [Roadmap](#roadmap)).
+> **Status:** the data layer, REST API, MCP server and the touchscreen grocery list work today. More screens, the "plan my week" agent and receipt scanning are coming next (see [Roadmap](#roadmap)).
+
+![Grocery list on the 7" touchscreen](docs/grocery-screen.png)
 
 ## What it does
 
 - **Pantry:** what you have, how much, and when it expires. Shows what to use soon.
 - **Meal plan:** breakfast, lunch, dinner and snacks by day, with optional recipes.
 - **Grocery list:** add and check off items. Adding something already on the list merges it instead of creating a duplicate.
+- **Touchscreen app:** a big-button kitchen display. Tap an item on the grocery list to check it off; arrows switch between screens.
 - **Claude integration:** any MCP client, such as Claude Code, can read and change all of the above. Ask "what's expiring this week?" or "add milk and eggs to the grocery list".
 
 ## How it works
@@ -16,20 +19,21 @@ A kitchen assistant that runs on a Raspberry Pi with a touchscreen. It keeps tra
 ```mermaid
 flowchart LR
     CC[Claude Code / MCP client] -- /mcp --> S
-    UI[Touchscreen app - coming] -- /api --> S
+    UI[Touchscreen app] -- /api --> S
     S[FastAPI server :8000] --> T[core/tools.py]
     T --> DB[(SQLite kitchen.db)]
 ```
 
 - **`core/tools.py`** holds every kitchen action (add an item, set a meal, check off a grocery). Each piece of the app calls these same functions, so the logic lives in one place.
 - **`server/app.py`** is a single FastAPI server that exposes those functions two ways: as an MCP server at `/mcp` for Claude, and as a small REST API at `/api` for the touchscreen.
+- **`ui/`** is the Kivy touchscreen app. It only talks to the server's REST API, always from a background thread so taps never freeze while the network is slow.
 - **`core/db.py`** stores everything in a single SQLite file. The tables are created automatically the first time it runs.
 
 ## What you need
 
 - **Python 3.13**
 - To use it with Claude: **Claude Code**, or another MCP client that supports HTTP servers
-- For the kitchen display (later): a **Raspberry Pi Zero 2 W or newer** and a touchscreen. The project is built on a 7" 1024x600 screen.
+- For the touchscreen app: **Kivy 2.3** and a screen. The project is built on a **Raspberry Pi Zero 2 W** with a 7" 1024x600 touchscreen, and also runs in a window on Windows for development.
 
 ## Setup
 
@@ -71,6 +75,18 @@ flowchart LR
    venv/Scripts/python -m uvicorn server.app:app --env-file .env --host 0.0.0.0 --port 8000
    ```
    The server refuses to start without a `KITCHEN_TOKEN` of at least 32 characters. Interactive API docs are at http://localhost:8000/docs.
+
+6. **Start the touchscreen app** (in a second terminal, with the server running).
+
+   Install Kivy first. It isn't in `requirements.txt` because the Pi gets it from apt:
+   - Windows: `venv\Scripts\python -m pip install kivy`
+   - Raspberry Pi: `sudo apt install python3-kivy` (the venv sees it through `--system-site-packages`)
+
+   Then run:
+   ```bash
+   venv/Scripts/python -m ui.main
+   ```
+   It opens a 1024x600 window on Windows and goes fullscreen on Linux. It reads the same `.env`, so it uses your token automatically.
 
 ## Connect Claude
 
@@ -123,6 +139,7 @@ Every request needs the header `Authorization: Bearer <KITCHEN_TOKEN>`; without 
 |---|---|---|
 | `KITCHEN_TOKEN` | none (required) | Bearer token every REST and MCP request must send |
 | `KITCHEN_DB` | `kitchen.db` in the repo folder | Where the SQLite database lives |
+| `KITCHEN_API` | `http://127.0.0.1:8000` | Server address the touchscreen app talks to |
 
 Settings are read from `.env` (see `.env.example`).
 
@@ -139,6 +156,11 @@ Settings are read from `.env` (see `.env.example`).
 core/db.py          SQLite schema and connection
 core/tools.py       Every kitchen action (shared by MCP, REST and the UI)
 server/app.py       FastAPI server: REST at /api, MCP at /mcp
+ui/main.py          Touchscreen app: screens, arrows, screen-name badge
+ui/grocery_screen.py  Grocery list screen
+ui/clock_screen.py  Clock screen
+ui/api.py           Background-thread REST client for the app
+ui/ui_common.py     Shared look: gradients, cards, buttons, tap debounce
 tests/              Tests for the tools and the token check (temporary databases)
 .env.example        The settings you need, with no values
 requirements.txt    Pinned Python dependencies
@@ -148,7 +170,8 @@ requirements.txt    Pinned Python dependencies
 
 - [x] Pantry, meal plan and grocery data with tests
 - [x] REST API and MCP server
-- [ ] Touchscreen app for the kitchen (Kivy): today's meals, grocery list, pantry, step-by-step cook mode
+- [x] Touchscreen app with the grocery list and a clock
+- [ ] More screens: today's meals, pantry, step-by-step cook mode
 - [ ] "Plan my week" button: Claude builds a meal plan from what's in the pantry
 - [ ] Receipt scanning: photograph a receipt and Claude adds the items to the pantry with expiry dates
 - [ ] Runs as a service on the Pi, with nightly backups
