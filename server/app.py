@@ -86,4 +86,9 @@ def check_grocery(item_id: int, checked: bool = True):
     return tools.check_grocery_item(item_id, checked)
 
 
+@app.post("/api/grocery/clear-checked")
+def clear_checked_groceries():
+    return {"removed": tools.clear_checked_groceries()}
+
+
 app.mount("/", mcp_app)

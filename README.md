@@ -113,6 +113,7 @@ From another device, replace `localhost` with the server's hostname (for example
 | GET | `/api/meals?start=YYYY-MM-DD&days=7` | Meal plan (start defaults to today) |
 | GET | `/api/grocery?include_checked=false` | Grocery list |
 | POST | `/api/grocery/{id}/check?checked=true` | Check or uncheck an item |
+| POST | `/api/grocery/clear-checked` | Delete checked-off items |
 
 Every request needs the header `Authorization: Bearer <KITCHEN_TOKEN>`; without it you get `401`. Bad input (an unknown id, a malformed date) returns `400` with a `detail` message.
 
