@@ -59,7 +59,7 @@ def get_pantry() -> list[dict]:
     """List everything in the pantry, soonest-expiring first."""
     with _tx() as conn:
         return _rows(conn.execute(
-            "SELECT * FROM pantry_items ORDER BY expires_on IS NULL, expires_on, name"))
+            "SELECT * FROM pantry_items ORDER BY expires_on IS NULL, expires_on, name COLLATE NOCASE"))
 
 
 def add_pantry_items(items: list[PantryItemIn], source: Literal["manual", "receipt", "agent"] = "manual") -> list[int]:
@@ -98,7 +98,7 @@ def get_expiring(days: int = 3) -> list[dict]:
     cutoff = (date.today() + timedelta(days=days)).isoformat()
     with _tx() as conn:
         return _rows(conn.execute(
-            "SELECT * FROM pantry_items WHERE expires_on IS NOT NULL AND expires_on <= ? ORDER BY expires_on, name",
+            "SELECT * FROM pantry_items WHERE expires_on IS NOT NULL AND expires_on <= ? ORDER BY expires_on, name COLLATE NOCASE",
             (cutoff,)))
 
 
@@ -137,7 +137,7 @@ def get_grocery_list(include_checked: bool = False) -> list[dict]:
     """List the grocery list. Checked-off items are hidden unless include_checked is true."""
     where = "" if include_checked else "WHERE checked = 0"
     with _tx() as conn:
-        return _rows(conn.execute(f"SELECT * FROM grocery_items {where} ORDER BY checked, name"))
+        return _rows(conn.execute(f"SELECT * FROM grocery_items {where} ORDER BY checked, name COLLATE NOCASE"))
 
 
 def add_grocery_items(items: list[GroceryItemIn]) -> list[int]:
