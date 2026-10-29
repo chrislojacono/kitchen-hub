@@ -8,12 +8,14 @@ from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 
 from core import tools
+from server import phone
 
 TOKEN = os.environ.get("KITCHEN_TOKEN", "")
 if len(TOKEN) < 32:
     raise RuntimeError("Set KITCHEN_TOKEN to a random value of at least 32 characters (see README)")
 
-OPEN_PATHS = {"/docs", "/openapi.json"}
+OPEN_PATHS = {"/docs", "/openapi.json", "/pair", "/m", "/m/app.js"}
+BEARER_ONLY_PREFIXES = ("/api/pair", "/api/phones/")
 
 TOOLS = [
     tools.get_pantry, tools.add_pantry_items, tools.use_pantry_item, tools.get_expiring,
@@ -50,10 +52,16 @@ app = FastAPI(title="Kitchen Hub", lifespan=lambda _: mcp.session_manager.run())
 
 @app.middleware("http")
 async def require_token(request: Request, call_next):
-    if request.url.path not in OPEN_PATHS:
-        supplied = request.headers.get("authorization", "").removeprefix("Bearer ")
-        if not secrets.compare_digest(supplied.encode(), TOKEN.encode()):
-            return JSONResponse(status_code=401, content={"detail": "Missing or invalid token"})
+    path = request.url.path
+    supplied = request.headers.get("authorization", "").removeprefix("Bearer ")
+    allowed = (
+        path in OPEN_PATHS
+        or secrets.compare_digest(supplied.encode(), TOKEN.encode())
+        or (path.startswith("/api/") and not path.startswith(BEARER_ONLY_PREFIXES)
+            and phone.valid_session(request.cookies.get(phone.COOKIE)))
+    )
+    if not allowed:
+        return JSONResponse(status_code=401, content={"detail": "Missing or invalid token"})
     return await call_next(request)
 
 
@@ -102,4 +110,5 @@ def clear_checked_groceries():
     return {"removed": tools.clear_checked_groceries()}
 
 
+app.include_router(phone.router)
 app.mount("/", mcp_app)

@@ -41,6 +41,11 @@ CREATE TABLE IF NOT EXISTS grocery_history (
     last_added TEXT NOT NULL DEFAULT (date('now', 'localtime'))
 );
 
+CREATE TABLE IF NOT EXISTS phone_sessions (
+    token_hash TEXT PRIMARY KEY,
+    created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+);
+
 CREATE TABLE IF NOT EXISTS receipts (
     id INTEGER PRIMARY KEY,
     image_path TEXT NOT NULL,

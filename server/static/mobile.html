@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f2a20">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Groceries">
+<title>Groceries</title>
+<style>
+  :root {
+    --bg: #0d1512; --surface: #16211d; --surface-2: #1d2b26; --text: #e2e6ec; --muted: #9eadc2;
+    --accent: #3ccf8e; --accent-text: #05261a; --danger: #ff8a80; --line: #24342e;
+  }
+  @media (prefers-color-scheme: light) {
+    :root { --bg: #f4f7f5; --surface: #ffffff; --surface-2: #eaf0ec; --text: #14201b; --muted: #5d6b66;
+            --accent: #1f9d63; --accent-text: #ffffff; --danger: #c62828; --line: #dde5e0; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 17px/1.4 system-ui, -apple-system, sans-serif;
+         padding-bottom: calc(24px + env(safe-area-inset-bottom)); }
+  header { position: sticky; top: 0; z-index: 2; background: var(--bg); padding: calc(14px + env(safe-area-inset-top)) 16px 10px;
+           border-bottom: 1px solid var(--line); }
+  .title { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; }
+  h1 { font-size: 22px; margin: 0; }
+  #count { color: var(--muted); font-size: 15px; }
+  form { display: flex; gap: 8px; }
+  input { flex: 1; min-width: 0; font: inherit; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line);
+          background: var(--surface); color: var(--text); }
+  input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  button { font: inherit; border: 0; border-radius: 12px; cursor: pointer; }
+  .add { background: var(--accent); color: var(--accent-text); font-weight: 600; padding: 0 18px; }
+  .chips { display: flex; gap: 8px; overflow-x: auto; padding: 10px 0 2px; scrollbar-width: none; }
+  .chips::-webkit-scrollbar { display: none; }
+  .chip { flex: none; background: var(--surface-2); color: var(--text); padding: 8px 14px; font-size: 15px; }
+  .chip::before { content: "+ "; color: var(--accent); font-weight: 700; }
+  main { padding: 8px 16px; }
+  ul { list-style: none; margin: 0; padding: 0; }
+  li button { width: 100%; display: flex; align-items: center; gap: 14px; text-align: left; background: var(--surface);
+              color: var(--text); padding: 14px; margin: 6px 0; min-height: 56px; }
+  .box { flex: none; width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--muted); display: grid; place-items: center; }
+  .done .box { background: var(--accent); border-color: var(--accent); }
+  .done .box::after { content: ""; width: 7px; height: 12px; border: solid var(--accent-text); border-width: 0 3px 3px 0;
+                      transform: translateY(-2px) rotate(45deg); }
+  .name { flex: 1; overflow-wrap: anywhere; }
+  .qty { color: var(--muted); font-size: 15px; }
+  .done { opacity: .5; }
+  .done .name { text-decoration: line-through; }
+  .empty { text-align: center; color: var(--muted); padding: 48px 16px; }
+  #clear { display: block; margin: 16px auto 0; background: transparent; color: var(--danger); padding: 12px 18px; }
+  #toast { position: fixed; left: 16px; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom)); padding: 12px 16px;
+           border-radius: 12px; background: var(--danger); color: #fff; text-align: center; opacity: 0;
+           transition: opacity .2s; pointer-events: none; }
+  #toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+<header>
+  <div class="title"><h1>Grocery list</h1><span id="count"></span></div>
+  <form id="add-form" autocomplete="off">
+    <input id="add-input" name="item" placeholder="Add an item, e.g. 2 avocados" maxlength="90" autocapitalize="sentences" enterkeyhint="done" aria-label="Item to add">
+    <button class="add" type="submit">Add</button>
+  </form>
+  <div class="chips" id="chips" aria-label="Frequently bought"></div>
+</header>
+<main>
+  <ul id="list"></ul>
+  <p class="empty" id="empty" hidden>Nothing on the list yet.</p>
+  <button id="clear" hidden></button>
+</main>
+<div id="toast" role="status"></div>
+<script src="/m/app.js"></script>
+</body>
+</html>
