@@ -1,3 +1,5 @@
+import os
+import secrets
 from functools import wraps
 
 from fastapi import FastAPI, Request
@@ -6,6 +8,12 @@ from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 
 from core import tools
+
+TOKEN = os.environ.get("KITCHEN_TOKEN", "")
+if len(TOKEN) < 32:
+    raise RuntimeError("Set KITCHEN_TOKEN to a random value of at least 32 characters (see README)")
+
+OPEN_PATHS = {"/docs", "/openapi.json"}
 
 TOOLS = [
     tools.get_pantry, tools.add_pantry_items, tools.use_pantry_item, tools.get_expiring,
@@ -33,10 +41,19 @@ def _tool(fn):
 for fn in TOOLS:
     mcp.add_tool(_tool(fn))
 
-# ponytail: host="0.0.0.0" turns off the SDK's DNS-rebinding check so tailnet hostnames work; add auth before exposing beyond LAN/tailnet
+# host="0.0.0.0" turns off the SDK's localhost-only DNS-rebinding check so tailnet hostnames work; the bearer token below covers it
 mcp_app = mcp.streamable_http_app(stateless_http=True, json_response=True, host="0.0.0.0")
 
 app = FastAPI(title="Kitchen Hub", lifespan=lambda _: mcp.session_manager.run())
+
+
+@app.middleware("http")
+async def require_token(request: Request, call_next):
+    if request.url.path not in OPEN_PATHS:
+        supplied = request.headers.get("authorization", "").removeprefix("Bearer ")
+        if not secrets.compare_digest(supplied.encode(), TOKEN.encode()):
+            return JSONResponse(status_code=401, content={"detail": "Missing or invalid token"})
+    return await call_next(request)
 
 
 @app.exception_handler(ValueError)

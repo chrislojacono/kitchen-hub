@@ -53,25 +53,34 @@ flowchart LR
    venv/bin/python -m pip install -r requirements.txt
    ```
 
-3. **Run the tests:**
+3. **Create your `.env` file.** Copy `.env.example` to `.env`, then set `KITCHEN_TOKEN` to a random value:
+   ```bash
+   venv/Scripts/python -c "import secrets; print(secrets.token_urlsafe(32))"
+   ```
+   `.env` is gitignored. Never commit it or paste the token anywhere public.
+
+4. **Run the tests:**
    ```bash
    venv/Scripts/python -m tests.test_tools
+   venv/Scripts/python -m tests.test_server
    ```
-   Use `venv/bin/python` on Linux. You should see three `ok` lines.
+   Use `venv/bin/python` on Linux. Every line should end in `ok`.
 
-4. **Start the server:**
+5. **Start the server:**
    ```bash
-   venv/Scripts/python -m uvicorn server.app:app --host 0.0.0.0 --port 8000
+   venv/Scripts/python -m uvicorn server.app:app --env-file .env --host 0.0.0.0 --port 8000
    ```
-   Check it with http://localhost:8000/api/grocery, which returns `[]` on a fresh install. Interactive API docs are at http://localhost:8000/docs.
+   The server refuses to start without a `KITCHEN_TOKEN` of at least 32 characters. Interactive API docs are at http://localhost:8000/docs.
 
 ## Connect Claude
 
 With the server running, register it with Claude Code:
 
 ```bash
-claude mcp add --transport http kitchen http://localhost:8000/mcp
+claude mcp add --transport http kitchen http://localhost:8000/mcp --header "Authorization: Bearer <your KITCHEN_TOKEN>"
 ```
+
+This saves the token in your local Claude Code config, not in the repo.
 
 From another device, replace `localhost` with the server's hostname (for example its Tailscale name). Then try:
 
@@ -105,15 +114,23 @@ From another device, replace `localhost` with the server's hostname (for example
 | GET | `/api/grocery?include_checked=false` | Grocery list |
 | POST | `/api/grocery/{id}/check?checked=true` | Check or uncheck an item |
 
-Bad input (an unknown id, a malformed date) returns `400` with a `detail` message.
+Every request needs the header `Authorization: Bearer <KITCHEN_TOKEN>`; without it you get `401`. Bad input (an unknown id, a malformed date) returns `400` with a `detail` message.
 
 ## Configuration
 
 | Setting | Default | Purpose |
 |---|---|---|
-| `KITCHEN_DB` env var | `kitchen.db` in the repo folder | Where the SQLite database lives |
+| `KITCHEN_TOKEN` | none (required) | Bearer token every REST and MCP request must send |
+| `KITCHEN_DB` | `kitchen.db` in the repo folder | Where the SQLite database lives |
 
-> **Security:** the server has no authentication yet. Only run it on your home network or a private network like Tailscale. Never expose it to the internet.
+Settings are read from `.env` (see `.env.example`).
+
+## Security
+
+- **Secrets stay local.** Tokens and API keys live only in `.env` (gitignored) or the Pi's service environment, never in the code or the repo.
+- **Every request is authenticated.** `/api` and `/mcp` require the bearer token (compared in constant time). Only `/docs` and `/openapi.json` are open, and they describe the API, not your data.
+- **Network.** Even with the token, run the server only on your home network or a private network like Tailscale. Don't port-forward it to the internet.
+- **Database.** `kitchen.db` is gitignored and never leaves the device except in your own backups.
 
 ## Project layout
 
@@ -121,7 +138,8 @@ Bad input (an unknown id, a malformed date) returns `400` with a `detail` messag
 core/db.py          SQLite schema and connection
 core/tools.py       Every kitchen action (shared by MCP, REST and the UI)
 server/app.py       FastAPI server: REST at /api, MCP at /mcp
-tests/test_tools.py Tests for the tools (each run uses a temporary database)
+tests/              Tests for the tools and the token check (temporary databases)
+.env.example        The settings you need, with no values
 requirements.txt    Pinned Python dependencies
 ```
 
