@@ -82,6 +82,16 @@ def grocery(include_checked: bool = False):
     return tools.get_grocery_list(include_checked)
 
 
+@app.post("/api/grocery")
+def add_grocery(items: list[tools.GroceryItemIn]):
+    return tools.add_grocery_items(items)
+
+
+@app.get("/api/grocery/frequent")
+def frequent_groceries(limit: int = 12):
+    return tools.get_frequent_groceries(limit)
+
+
 @app.post("/api/grocery/{item_id}/check")
 def check_grocery(item_id: int, checked: bool = True):
     return tools.check_grocery_item(item_id, checked)
