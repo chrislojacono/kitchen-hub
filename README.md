@@ -110,6 +110,33 @@ flowchart LR
 ![Pairing a phone](docs/phone-pairing.png)
 ![A dinner's actions on the touchscreen](docs/dinner-panel.png)
 
+## Run it on a Raspberry Pi
+
+The kitchen display is a Raspberry Pi Zero 2 W with a 7" touchscreen. One script installs everything, and after that it all starts on boot.
+
+```bash
+sudo apt-get install -y git
+git clone https://github.com/<you>/kitchen-hub.git ~/kitchen-hub
+cd ~/kitchen-hub
+./deploy/install-pi.sh
+sudo reboot
+```
+
+The installer:
+- installs Kivy and prebuilt copies of the compiled Python dependencies from apt, so nothing has to compile on the Pi. If the MCP SDK's dependencies still won't install, it falls back to Debian's FastAPI and runs without `/mcp`; the touchscreen and phones keep working.
+- creates `.env` with a new token if you don't have one. To keep the same token as another machine, copy that `.env` over first.
+- runs the server as the `kitchen-hub-api` systemd service, which starts on boot and restarts if it stops.
+- starts the touchscreen app at desktop login (the Pi needs desktop autologin, set in `raspi-config`). The app waits for the server, runs fullscreen with the mouse cursor hidden, and restarts if it crashes.
+
+Turn off screen blanking (`raspi-config` → Display Options) so the display stays on.
+
+| Need to | Run |
+|---|---|
+| Update to the latest code | `cd ~/kitchen-hub && git pull && ./deploy/install-pi.sh` |
+| See server logs | `journalctl -u kitchen-hub-api -n 50` |
+| See touchscreen app logs | `cat ~/.kitchen-hub-ui.log` |
+| Restart the server | `sudo systemctl restart kitchen-hub-api` |
+
 ## Connect Claude
 
 With the server running, register it with Claude Code:
@@ -216,6 +243,7 @@ ui/ui_common.py     Shared look: gradients, cards, buttons, tap debounce
 tests/              Tests for the tools, recipes, auth and phone pairing (temporary databases)
 docs/               Screenshots
 .env.example        The settings you need, with no values
+deploy/             Pi installer, systemd service, touchscreen autostart
 requirements.txt    Pinned Python dependencies
 ```
 
@@ -231,5 +259,6 @@ requirements.txt    Pinned Python dependencies
 - [ ] More screens: pantry, step-by-step cook mode from a dinner's recipe
 - [ ] "Plan my week" button: Claude builds a meal plan from what's in the pantry
 - [ ] Receipt scanning: photograph a receipt and Claude adds the items to the pantry with expiry dates
-- [ ] Runs as a service on the Pi, with nightly backups
+- [x] One-step Pi install; server and touchscreen app start on boot
+- [ ] Nightly backups
 - [ ] Remote access from your phone via Tailscale
