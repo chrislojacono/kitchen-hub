@@ -8,6 +8,9 @@ const mealHeading = document.getElementById("meal-heading");
 const mealTitle = document.getElementById("meal-title");
 const mealTakeout = document.getElementById("meal-takeout");
 const mealCooks = document.getElementById("meal-cooks");
+const mealCookField = document.getElementById("meal-cook-field");
+const mealNotes = document.getElementById("meal-notes");
+const mealNotesLabel = document.getElementById("meal-notes-label");
 const mealRecipeSummary = document.getElementById("meal-recipe-summary");
 const mealRecipeText = document.getElementById("meal-recipe-text");
 const mealRecipeEntry = document.getElementById("meal-recipe-entry");
@@ -116,9 +119,16 @@ function renderWeek() {
       badges.className = "badges";
       if (meal.takeout && meal.title !== "Take-Out!") badges.append(badge("Take-Out!", "takeout"));
       if (meal.takeout && meal.title === "Take-Out!") title.classList.add("takeout-title");
-      if (meal.cook) badges.append(badge(meal.cook, `cook-${Math.max(0, cooks.indexOf(meal.cook)) % 3}`));
+      if (meal.cook && !meal.takeout) badges.append(badge(meal.cook, `cook-${Math.max(0, cooks.indexOf(meal.cook)) % 3}`));
       if (recipeLines(meal).length) badges.append(badge(`${recipeLines(meal).length} ingredients`, ""));
-      body.append(title, badges);
+      body.append(title);
+      if (meal.notes) {
+        const notes = document.createElement("span");
+        notes.className = "day-notes";
+        notes.textContent = meal.notes;
+        body.append(notes);
+      }
+      if (badges.childElementCount) body.append(badges);
     } else {
       const empty = document.createElement("span");
       empty.className = "day-empty";
@@ -149,6 +159,13 @@ function renderCookButtons(selected) {
     });
     return button;
   }));
+}
+
+function renderTakeout() {
+  const takeout = mealTakeout.getAttribute("aria-pressed") === "true";
+  mealCookField.hidden = takeout;
+  mealNotesLabel.textContent = takeout ? "Where from?" : "Notes";
+  mealNotes.placeholder = takeout ? "Options, e.g. Thai Basil or pizza from Lou's" : "Optional, e.g. double the sauce";
 }
 
 function renderMealRecipe() {
@@ -182,6 +199,8 @@ function openMeal(key) {
   mealHeading.textContent = longDate(key, { weekday: "long", month: "long", day: "numeric" });
   mealTitle.value = editing.title;
   setPressed(mealTakeout, editing.takeout);
+  mealNotes.value = editing.notes || "";
+  renderTakeout();
   renderCookButtons(editing.cook);
   mealRecipeInput.value = "";
   renderMealRecipe();
@@ -214,6 +233,7 @@ mealTakeout.addEventListener("click", () => {
   setPressed(mealTakeout, on);
   if (on && !mealTitle.value.trim()) mealTitle.value = "Take-Out!";
   if (!on && mealTitle.value.trim() === "Take-Out!") mealTitle.value = "";
+  renderTakeout();
 });
 
 mealRecipeRead.addEventListener("click", async () => {
@@ -253,6 +273,7 @@ mealForm.addEventListener("submit", async (event) => {
     takeout: mealTakeout.getAttribute("aria-pressed") === "true",
     cook: pressedCook && pressedCook.dataset.cook ? pressedCook.dataset.cook : null,
     recipe: editing.recipe,
+    notes: mealNotes.value.trim() || null,
   };
   const target = mealDay.value;
   const newRecipe = dinner.recipe && JSON.stringify(dinner.recipe) !== JSON.stringify((meals[editing.originalDate] || {}).recipe);

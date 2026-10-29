@@ -99,6 +99,8 @@
   .day-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
   .day-title { font-weight: 600; overflow-wrap: anywhere; }
   .day-empty { color: var(--muted); }
+  .day-notes { color: var(--muted); font-size: 14px; overflow-wrap: anywhere; }
+  .field textarea { font: inherit; font-size: 17px; }
   .badges { display: flex; flex-wrap: wrap; gap: 6px; }
   .badge { font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 999px; background: var(--surface-2); color: var(--muted); }
   .badge.cook-0 { background: #1f5b43; color: #c9f5df; }
@@ -160,7 +162,10 @@
       <input id="meal-title" maxlength="120" autocapitalize="sentences" placeholder="e.g. Sheet-pan chicken" required>
     </label>
     <button type="button" class="toggle" id="meal-takeout" aria-pressed="false">Take-Out!</button>
-    <div class="field">Who's cooking?<div class="segments" id="meal-cooks"></div></div>
+    <div class="field" id="meal-cook-field">Who's cooking?<div class="segments" id="meal-cooks"></div></div>
+    <label class="field"><span id="meal-notes-label">Notes</span>
+      <textarea id="meal-notes" rows="2" maxlength="300" autocapitalize="sentences"></textarea>
+    </label>
     <div class="field">Recipe
       <div id="meal-recipe-summary" class="recipe-summary" hidden>
         <span id="meal-recipe-text"></span><button type="button" class="link" id="meal-recipe-remove">Remove</button>
