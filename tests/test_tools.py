@@ -107,7 +107,11 @@ def test_dinner_plan():
     tacos = tools.set_meal(_day(0), "dinner", "Tacos", cook="Alex",
                            recipe={"lines": ["1 lb ground beef", "2 cups rice", "Kosher salt"]})
     assert tacos["cook"] == "Alex" and tacos["takeout"] is False and tacos["recipe"]["lines"][0] == "1 lb ground beef"
-    tools.set_meal(_day(2), "dinner", "Take-Out!", takeout=True)
+    takeout = tools.set_meal(_day(2), "dinner", "Take-Out!", takeout=True, cook="Sam",
+                             notes="  Thai Basil   or pizza from Lou's ")
+    assert takeout["cook"] is None and takeout["notes"] == "Thai Basil or pizza from Lou's"
+    assert tools.set_meal(_day(3), "dinner", "Soup", notes="   ")["notes"] is None
+    tools.remove_meal(_day(3), "dinner")
     try:
         tools.set_meal(_day(1), "dinner", "Soup", cook="Nobody")
         raise AssertionError("accepted an unknown cook")
@@ -139,7 +143,7 @@ def test_old_database_upgraded():
         conn.execute("INSERT INTO meals (date, slot, title) VALUES ('2026-01-01', 'dinner', 'Old meal')")
     db.DB_PATH = path
     meal = tools.get_meal_plan("2026-01-01", 1)[0]
-    assert meal["title"] == "Old meal" and meal["cook"] is None and meal["takeout"] is False
+    assert meal["title"] == "Old meal" and meal["cook"] is None and meal["takeout"] is False and meal["notes"] is None
     db.connect().close()
 
 

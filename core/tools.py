@@ -27,6 +27,7 @@ class GroceryItemIn(TypedDict):
 MAX_NAME_LENGTH = 80
 MAX_TITLE_LENGTH = 120
 MAX_RECIPE_BYTES = 100_000
+MAX_NOTES_LENGTH = 300
 STAPLES = ["Milk", "Eggs", "Bread", "Butter", "Bananas", "Apples", "Onions", "Garlic",
            "Chicken", "Rice", "Pasta", "Cheese", "Yogurt", "Coffee", "Tomatoes", "Spinach"]
 
@@ -129,22 +130,26 @@ def get_meal_plan(start: str | None = None, days: int = 7) -> list[dict]:
 
 
 def set_meal(day: str, slot: Slot, title: str, recipe: dict | None = None, cook: str | None = None,
-             takeout: bool = False) -> dict:
+             takeout: bool = False, notes: str | None = None) -> dict:
     """Plan a meal, replacing whatever was in that slot. day is YYYY-MM-DD; slot is breakfast, lunch, dinner or
-    snack (this household plans dinner only). cook is one of get_cooks() or null. takeout marks a take-out night.
+    snack (this household plans dinner only). cook is one of get_cooks() or null; take-out nights have no cook.
+    takeout marks a take-out night, and its notes are where to order from, e.g. "Thai Basil or pizza from Lou's".
     recipe is optional, e.g. {"title": ..., "source": url, "lines": ["2 cups rice", ...], "steps": [...]}."""
     cooks = get_cooks()
+    if takeout:
+        cook = None
     if cook is not None and cook not in cooks:
         raise ValueError(f"cook must be one of: {', '.join(cooks) or 'nobody yet (set KITCHEN_COOKS)'}")
     recipe_json = json.dumps(recipe) if recipe else None
     if recipe_json and len(recipe_json) > MAX_RECIPE_BYTES:
         raise ValueError("That recipe is too large")
+    notes = _text(notes, MAX_NOTES_LENGTH) if notes and notes.strip() else None
     with _tx() as conn:
         conn.execute(
-            "INSERT INTO meals (date, slot, title, recipe_json, cook, takeout) VALUES (?, ?, ?, ?, ?, ?) "
+            "INSERT INTO meals (date, slot, title, recipe_json, cook, takeout, notes) VALUES (?, ?, ?, ?, ?, ?, ?) "
             "ON CONFLICT (date, slot) DO UPDATE SET title = excluded.title, recipe_json = excluded.recipe_json, "
-            "cook = excluded.cook, takeout = excluded.takeout",
-            (_iso(day), slot, _text(title, MAX_TITLE_LENGTH), recipe_json, cook, int(takeout)))
+            "cook = excluded.cook, takeout = excluded.takeout, notes = excluded.notes",
+            (_iso(day), slot, _text(title, MAX_TITLE_LENGTH), recipe_json, cook, int(takeout), notes))
         return _meal(conn.execute("SELECT * FROM meals WHERE date = ? AND slot = ?", (_iso(day), slot)).fetchone())
 
 

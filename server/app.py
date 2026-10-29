@@ -87,6 +87,7 @@ class DinnerIn(TypedDict):
     recipe: NotRequired[dict | None]
     cook: NotRequired[str | None]
     takeout: NotRequired[bool]
+    notes: NotRequired[str | None]
 
 
 @app.get("/api/meals")
@@ -102,7 +103,7 @@ def cooks():
 @app.put("/api/meals/{day}")
 def set_dinner(day: str, dinner: DinnerIn):
     return tools.set_meal(day, "dinner", dinner["title"], dinner.get("recipe"), dinner.get("cook"),
-                          dinner.get("takeout", False))
+                          dinner.get("takeout", False), dinner.get("notes"))
 
 
 @app.delete("/api/meals/{day}")

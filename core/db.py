@@ -59,6 +59,7 @@ CREATE TABLE IF NOT EXISTS receipts (
 MIGRATIONS = [
     "ALTER TABLE meals ADD COLUMN cook TEXT",
     "ALTER TABLE meals ADD COLUMN takeout INTEGER NOT NULL DEFAULT 0 CHECK (takeout IN (0, 1))",
+    "ALTER TABLE meals ADD COLUMN notes TEXT",
 ]
 
 
